@@ -73,6 +73,21 @@ Examples:
 | CBC result: Hemoglobin 13.5. | Your laboratory result is available. Please log in securely. |
 | Diagnosis: pneumonia. | A secure clinical document is available for review. |
 
+## Implemented Prototype Safeguards
+
+- High-risk demo roles require MFA before login.
+- Permission checks are centralized in the client-side prototype for patient, billing, lab, inventory, HR, report, notification, backup, and audit actions.
+- Denied permissions create audit records instead of failing silently.
+- Sensitive actions use reason-required confirmation modals.
+- Very risky actions require a keyword, such as `VOID` or `AMEND`.
+- Maker-checker approvals prevent requesters from approving their own requests.
+- Result print/download is blocked until release.
+- Result-ready notifications are blocked until release and use privacy-safe text.
+- Sensitive exports require a reason and are audit-logged.
+- Runtime UI errors are logged to the audit trail in the prototype.
+
+These controls are prototype-level safeguards. A production implementation must enforce the same rules again on the server, in the database, and at the file storage boundary.
+
 ## Testing Requirements
 
 - Receptionist cannot approve lab results.
@@ -84,3 +99,5 @@ Examples:
 - Expired inventory cannot be issued without override.
 - Cashier cannot approve own refund.
 - Report export is logged and permission-checked.
+
+Run `npm test` to check the implemented rule helpers and static action wiring. Browser/UAT testing should still walk through each role because UI tests do not replace server-side authorization tests in production.

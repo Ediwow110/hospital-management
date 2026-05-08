@@ -1,0 +1,9 @@
+{
+  "name": "hospital-management",
+  "version": "0.2.0",
+  "private": true,
+  "description": "Static HMS blueprint prototype with workflow, permission, and audit guardrails.",
+  "scripts": {
+    "test": "node tests/rules.test.js"
+  }
+}

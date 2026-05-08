@@ -60,3 +60,18 @@ Use this checklist for UAT and regression testing against the blueprint.
 - [ ] Email/SMS notifications do not expose medical content.
 - [ ] Private files are not exposed through public patient-detail URLs.
 - [ ] Backup exists before production deployment.
+
+## UI Wiring Tests
+
+- [ ] Every visible button either performs a workflow action, opens a screen/modal, submits a form, or is disabled when unavailable.
+- [ ] Global search moves to the patient list and filters matching records.
+- [ ] Patient list filters by status and search term.
+- [ ] Document preview, QR verification, print, export, notification, and health check actions create audit entries.
+- [ ] Permission-denied actions display a visible message and create an audit entry.
+
+## Automated Regression
+
+- [ ] `npm test` passes.
+- [ ] JavaScript syntax check passes with `node --check assets/js/app.js`.
+- [ ] Static action wiring check reports no missing `data-action` handlers.
+- [ ] SQL files pass basic quote and parenthesis balance checks.

@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Hospital Management System</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+  <link href="assets/css/styles.css" rel="stylesheet">
+</head>
+<body>
+  <section id="login-screen" class="login-shell">
+    <div class="login-panel">
+      <div class="brand-mark"><i class="bi bi-hospital"></i></div>
+      <h1>Hospital Management System</h1>
+      <p class="text-secondary">Secure staff access</p>
+      <form id="login-form" class="vstack gap-3">
+        <label class="form-label">Email
+          <input class="form-control" type="email" value="admin@hospital.local" autocomplete="username" required>
+        </label>
+        <label class="form-label">Password
+          <input class="form-control" type="password" value="password" autocomplete="current-password" required>
+        </label>
+        <div class="d-flex align-items-center justify-content-between small">
+          <label class="form-check-label"><input class="form-check-input me-1" type="checkbox" checked> MFA verified</label>
+          <span class="text-secondary">Main Branch</span>
+        </div>
+        <button class="btn btn-primary w-100" type="submit"><i class="bi bi-box-arrow-in-right"></i> Sign in</button>
+      </form>
+    </div>
+  </section>
+
+  <main id="app-shell" class="app-shell d-none">
+    <aside class="sidebar">
+      <div class="sidebar-brand"><i class="bi bi-hospital"></i><span>HMS</span></div>
+      <nav class="nav flex-column gap-1" id="main-nav">
+        <button class="nav-link active" data-screen="dashboard"><i class="bi bi-speedometer2"></i> Dashboard</button>
+        <div class="nav-group">Operations</div>
+        <button class="nav-link" data-screen="patients"><i class="bi bi-people"></i> Patients</button>
+        <button class="nav-link" data-screen="register"><i class="bi bi-person-plus"></i> Register Patient</button>
+        <button class="nav-link" data-screen="profile"><i class="bi bi-person-vcard"></i> Patient Profile</button>
+        <button class="nav-link" data-screen="orders"><i class="bi bi-clipboard2-pulse"></i> Create Order</button>
+        <button class="nav-link" data-screen="queue"><i class="bi bi-ticket-perforated"></i> Queue Monitor</button>
+        <div class="nav-group">Finance</div>
+        <button class="nav-link" data-screen="billing"><i class="bi bi-cash-coin"></i> Billing</button>
+        <button class="nav-link" data-screen="reports"><i class="bi bi-graph-up-arrow"></i> Reports</button>
+        <div class="nav-group">Laboratory</div>
+        <button class="nav-link" data-screen="lab"><i class="bi bi-eyedropper"></i> Result Encoding</button>
+        <button class="nav-link" data-screen="print"><i class="bi bi-printer"></i> Print Preview</button>
+        <div class="nav-group">Administration</div>
+        <button class="nav-link" data-screen="audit"><i class="bi bi-shield-check"></i> Audit Log</button>
+      </nav>
+    </aside>
+
+    <section class="workspace">
+      <header class="topbar">
+        <div class="input-group search-box">
+          <span class="input-group-text"><i class="bi bi-search"></i></span>
+          <input class="form-control" id="global-search" placeholder="Search patient, order, invoice, lab no.">
+        </div>
+        <button class="btn btn-primary" data-jump="register"><i class="bi bi-plus-lg"></i> Quick Create</button>
+        <button class="icon-btn" title="Notifications"><i class="bi bi-bell"></i><span class="dot"></span></button>
+        <div class="user-chip"><span>Main Branch</span><strong>Super Admin</strong></div>
+        <button class="btn btn-outline-secondary" id="logout-btn"><i class="bi bi-box-arrow-right"></i></button>
+      </header>
+
+      <section class="screen active" id="screen-dashboard">
+        <div class="page-header">
+          <div><p class="eyebrow">Command Center</p><h2>Main dashboard</h2></div>
+          <button class="btn btn-outline-secondary" id="run-demo"><i class="bi bi-play-circle"></i> Run CBC demo</button>
+        </div>
+        <div class="metric-grid">
+          <article class="metric"><span>Queue waiting</span><strong id="metric-queue">12</strong><small>3 priority</small></article>
+          <article class="metric"><span>Pending validation</span><strong id="metric-lab">8</strong><small>2 critical flags</small></article>
+          <article class="metric"><span>Unpaid invoices</span><strong id="metric-unpaid">5</strong><small>PHP 12,940</small></article>
+          <article class="metric"><span>Low stock alerts</span><strong>4</strong><small>1 critical reagent</small></article>
+        </div>
+        <div class="content-grid two-col">
+          <section class="panel">
+            <div class="panel-head"><h3>Action queue</h3><span class="badge text-bg-warning">Needs review</span></div>
+            <div class="list-group list-group-flush">
+              <div class="list-group-item d-flex justify-content-between"><span>Approve refund request OR-2026-000118</span><span class="text-secondary">Finance</span></div>
+              <div class="list-group-item d-flex justify-content-between"><span>Validate CBC LAB-2026-000341</span><span class="text-secondary">Lab</span></div>
+              <div class="list-group-item d-flex justify-content-between"><span>Review expiring reagent batch</span><span class="text-secondary">Inventory</span></div>
+            </div>
+          </section>
+          <section class="panel">
+            <div class="panel-head"><h3>Exception reports</h3><button class="btn btn-sm btn-outline-primary" data-jump="reports">Open</button></div>
+            <canvas id="exception-chart" height="170"></canvas>
+          </section>
+        </div>
+      </section>
+
+      <section class="screen" id="screen-patients">
+        <div class="page-header"><div><p class="eyebrow">Patient / Client Management</p><h2>Patient list</h2></div><button class="btn btn-primary" data-jump="register"><i class="bi bi-person-plus"></i> Register Patient</button></div>
+        <div class="panel">
+          <div class="table-toolbar">
+            <input class="form-control" placeholder="Search by name, patient ID, phone">
+            <select class="form-select"><option>Status: Active</option><option>Archived</option><option>Merged</option></select>
+            <button class="btn btn-outline-secondary"><i class="bi bi-download"></i> Export</button>
+          </div>
+          <div class="table-responsive"><table class="table align-middle"><thead><tr><th>Patient ID</th><th>Name</th><th>Age/Sex</th><th>Contact</th><th>Status</th><th class="text-end">Actions</th></tr></thead><tbody id="patient-table"></tbody></table></div>
+        </div>
+      </section>
+
+      <section class="screen" id="screen-register">
+        <div class="page-header"><div><p class="eyebrow">Registration</p><h2>Register patient</h2></div><button class="btn btn-outline-secondary" data-jump="patients"><i class="bi bi-arrow-left"></i> Back</button></div>
+        <form class="panel form-grid" id="registration-form">
+          <label>First name<input class="form-control" id="reg-first" value="Maria" required></label>
+          <label>Last name<input class="form-control" id="reg-last" value="Santos" required></label>
+          <label>Birthdate<input class="form-control" type="date" id="reg-birthdate" value="1991-03-14" required></label>
+          <label>Sex<select class="form-select" id="reg-sex"><option>female</option><option>male</option><option>other</option><option>undisclosed</option></select></label>
+          <label>Mobile<input class="form-control" id="reg-mobile" value="09171234567"></label>
+          <label>Email<input class="form-control" type="email" id="reg-email" value="maria.santos@example.com"></label>
+          <label class="span-2">Address<textarea class="form-control" id="reg-address" rows="3">Quezon City</textarea></label>
+          <div class="sticky-actions span-2"><button class="btn btn-secondary" type="reset">Clear</button><button class="btn btn-primary" type="submit"><i class="bi bi-save"></i> Register Patient</button></div>
+        </form>
+      </section>
+
+      <section class="screen" id="screen-profile">
+        <div class="page-header"><div><p class="eyebrow">Patient Profile</p><h2 id="profile-name">Juan Dela Cruz</h2></div><button class="btn btn-primary" data-jump="orders"><i class="bi bi-plus-lg"></i> Create order</button></div>
+        <div class="patient-summary">
+          <div><span>Patient ID</span><strong id="profile-id">P-2026-000001</strong></div>
+          <div><span>Classification</span><strong>Regular</strong></div>
+          <div><span>Duplicate risk</span><strong class="text-success">Clear</strong></div>
+          <div><span>Consent</span><strong>Signed</strong></div>
+        </div>
+        <div class="content-grid two-col">
+          <section class="panel"><h3>Recent orders</h3><div id="profile-orders" class="timeline"></div></section>
+          <section class="panel"><h3>Documents</h3><div class="document-row"><i class="bi bi-file-earmark-medical"></i><span>Released CBC result</span><button class="btn btn-sm btn-outline-secondary">Preview</button></div><div class="document-row"><i class="bi bi-file-earmark-lock"></i><span>Patient consent</span><button class="btn btn-sm btn-outline-secondary">View log</button></div></section>
+        </div>
+      </section>
+
+      <section class="screen" id="screen-orders">
+        <div class="page-header"><div><p class="eyebrow">Orders</p><h2>Create order</h2></div><span class="badge text-bg-secondary" id="order-status">Draft</span></div>
+        <div class="content-grid two-col">
+          <section class="panel">
+            <h3>Services</h3>
+            <div id="service-list" class="service-list"></div>
+          </section>
+          <section class="panel">
+            <h3>Order summary</h3>
+            <div id="order-items"></div>
+            <div class="total-row"><span>Total</span><strong id="order-total">PHP 0.00</strong></div>
+            <button class="btn btn-primary w-100" id="create-order"><i class="bi bi-clipboard-plus"></i> Create Order</button>
+          </section>
+        </div>
+      </section>
+
+      <section class="screen" id="screen-billing">
+        <div class="page-header"><div><p class="eyebrow">Billing & Cashier</p><h2>Billing/payment screen</h2></div><span class="badge text-bg-warning" id="invoice-status">Unpaid</span></div>
+        <div class="content-grid two-col">
+          <section class="panel"><h3>Invoice</h3><div class="invoice-box"><span id="invoice-no">INV-2026-000001</span><strong id="invoice-total">PHP 450.00</strong><small>Balance due</small></div><button class="btn btn-outline-danger w-100 mt-3" data-bs-toggle="modal" data-bs-target="#void-modal"><i class="bi bi-ban"></i> Request void</button></section>
+          <section class="panel"><h3>Accept payment</h3><form id="payment-form" class="vstack gap-3"><select class="form-select" id="payment-mode"><option>Cash</option><option>GCash</option><option>Maya</option><option>Bank transfer</option><option>Credit card</option><option>HMO</option></select><input class="form-control" id="payment-amount" value="450.00"><button class="btn btn-success"><i class="bi bi-check2-circle"></i> Post payment</button></form></section>
+        </div>
+      </section>
+
+      <section class="screen" id="screen-queue">
+        <div class="page-header"><div><p class="eyebrow">Queue</p><h2>Queue monitor</h2></div><button class="btn btn-outline-secondary"><i class="bi bi-printer"></i> Print ticket</button></div>
+        <div class="queue-board" id="queue-board"></div>
+      </section>
+
+      <section class="screen" id="screen-lab">
+        <div class="page-header"><div><p class="eyebrow">LIS</p><h2>Lab result encoding</h2></div><span class="badge text-bg-primary" id="lab-status">Processing</span></div>
+        <form class="panel" id="lab-form">
+          <div class="lab-meta"><span>LAB-2026-000001</span><span>CBC</span><span>Collected by Med-Tech</span></div>
+          <div class="table-responsive"><table class="table"><thead><tr><th>Analyte</th><th>Result</th><th>Unit</th><th>Reference range</th><th>Flag</th></tr></thead><tbody id="lab-items"></tbody></table></div>
+          <div class="sticky-actions"><button class="btn btn-warning" type="button" id="validate-result"><i class="bi bi-shield-check"></i> Validate</button><button class="btn btn-success" type="submit"><i class="bi bi-check2-circle"></i> Approve result</button></div>
+        </form>
+      </section>
+
+      <section class="screen" id="screen-print">
+        <div class="page-header"><div><p class="eyebrow">Documents</p><h2>Result print preview</h2></div><button class="btn btn-primary"><i class="bi bi-printer"></i> Print</button></div>
+        <article class="result-document">
+          <header><div><strong>Hospital Management System</strong><span>Main Branch Laboratory</span></div><div class="qr-box">QR</div></header>
+          <h3>Complete Blood Count</h3>
+          <p><strong>Patient:</strong> Juan Dela Cruz <span class="ms-3"><strong>Lab No:</strong> LAB-2026-000001</span></p>
+          <table class="table"><thead><tr><th>Test</th><th>Result</th><th>Unit</th><th>Reference</th><th>Flag</th></tr></thead><tbody id="print-items"></tbody></table>
+          <footer>Verification page shows authenticity only: validity, issue date, masked identity, result number, and amendment status.</footer>
+        </article>
+      </section>
+
+      <section class="screen" id="screen-reports">
+        <div class="page-header"><div><p class="eyebrow">Reports</p><h2>Sales and exception reports</h2></div><button class="btn btn-outline-secondary"><i class="bi bi-download"></i> Export with audit</button></div>
+        <div class="content-grid two-col"><section class="panel"><h3>Daily sales</h3><canvas id="sales-chart" height="180"></canvas></section><section class="panel"><h3>Exceptions</h3><ul class="exception-list"><li>Released results without payment <span>0</span></li><li>High discount transactions <span>2</span></li><li>Frequent voids/refunds <span>1</span></li><li>Low stock critical items <span>1</span></li></ul></section></div>
+      </section>
+
+      <section class="screen" id="screen-audit">
+        <div class="page-header"><div><p class="eyebrow">Security</p><h2>Audit log</h2></div><button class="btn btn-outline-secondary"><i class="bi bi-filter"></i> Filter</button></div>
+        <div class="panel"><div class="table-responsive"><table class="table align-middle"><thead><tr><th>Time</th><th>User</th><th>Module</th><th>Action</th><th>Record</th><th>Reason</th></tr></thead><tbody id="audit-table"></tbody></table></div></div>
+      </section>
+    </section>
+  </main>
+
+  <div class="modal fade" id="void-modal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog"><div class="modal-content"><div class="modal-header"><h5 class="modal-title">Void Order ORD-2026-000001?</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><p>This will cancel the order and remove it from active processing. Reason is required and the action will be recorded in the audit log.</p><textarea class="form-control" id="void-reason" placeholder="Reason" rows="3"></textarea></div><div class="modal-footer"><button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button><button class="btn btn-danger" id="request-void" data-bs-dismiss="modal">Request void</button></div></div></div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="assets/js/app.js"></script>
+</body>
+</html>

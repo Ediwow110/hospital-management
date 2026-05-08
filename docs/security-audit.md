@@ -1,0 +1,86 @@
+# Security, Privacy, and Audit Controls
+
+Healthcare software must be able to answer: who accessed what, when, from where, and what did they change?
+
+## Authentication
+
+- Strong password policy
+- MFA for admin, manager, doctor, HR, and finance users
+- OTP for patient portal access
+- Session timeout
+- Device and session tracking
+- Failed login lockout
+- Rate limiting for login, OTP, and password reset
+
+## Authorization
+
+- Role-based access control
+- Branch-based access
+- Department-based access
+- Patient assignment-based access
+- Approval-based access
+- Break-glass emergency access with temporary permission and required reason
+
+## Audit Log Minimum Fields
+
+- id
+- user_id
+- user_role
+- tenant_id
+- branch_id
+- module
+- action
+- record_type
+- record_id
+- old_values
+- new_values
+- ip_address
+- device_info
+- reason
+- created_at
+
+## Audit Actions to Track
+
+- Login, logout, and failed login
+- Patient viewed and edited
+- Report exported
+- Result encoded, approved, released, and amended
+- Payment created, voided, and refunded
+- Discount applied
+- Inventory adjusted
+- User role changed
+- Document printed or downloaded
+
+## Data Protection Rules
+
+- Encrypt traffic in transit.
+- Encrypt sensitive data and backups at rest.
+- Keep file storage private.
+- Use signed temporary download URLs.
+- Log downloads and print actions.
+- Enforce data retention policy.
+- Never expose public file paths containing patient details.
+
+## Messaging Privacy
+
+Email and SMS may notify, but must not expose medical content. Sensitive content stays inside the secured portal.
+
+Examples:
+
+| Unsafe | Safer |
+| --- | --- |
+| Your HIV test result is ready. | A new secure document is available in your patient portal. |
+| CBC result: Hemoglobin 13.5. | Your laboratory result is available. Please log in securely. |
+| Diagnosis: pneumonia. | A secure clinical document is available for review. |
+
+## Testing Requirements
+
+- Receptionist cannot approve lab results.
+- Cashier cannot amend diagnosis or lab result.
+- Med-tech cannot refund payment.
+- Patient cannot view another patient's result.
+- Released result cannot be edited without amendment.
+- Voided order cannot be paid.
+- Expired inventory cannot be issued without override.
+- Cashier cannot approve own refund.
+- Report export is logged and permission-checked.

@@ -62,6 +62,23 @@ The MVP must not include AI assistant features, free-form chat, video calls, ful
 9. View sales report
 10. View audit log
 
+## Implemented Prototype Controls
+
+The static app now implements the blueprint as workflow simulation rather than raw CRUD:
+
+- Login enforces strong demo password length and MFA for high-risk roles.
+- Role permissions are checked before sensitive patient, billing, laboratory, inventory, HR, report, backup, and notification actions.
+- Global search, patient filters, report exports, audit filters, queue actions, result print/verification, notification actions, and settings buttons are wired.
+- Sensitive actions require a reason through a confirmation modal: void, refund, merge, archive, result amendment, inventory adjustment, HR offboarding, backup restore, and sensitive exports.
+- Maker-checker approvals prevent a requester from approving their own refund, void, amendment, inventory adjustment, merge, or role/access change.
+- Payment posting blocks overpayment unless the explicit overpayment setting is enabled, locks paid invoices, and creates queue tickets only after full payment.
+- Laboratory status transitions are controlled: Pending Collection -> Collected -> Received -> Processing -> Encoded -> Validated -> Approved -> Released.
+- Released results are locked; amendment approval creates a new version and marks the prior result superseded.
+- Result-ready notifications are privacy-safe and blocked until release.
+- Inventory receiving captures supplier, batch, expiry, and quantity; expired stock issue is blocked without override workflow.
+- HR offboarding routes through access deactivation approval.
+- Audit logging records login/logout, permission denials, patient access, billing events, lab workflow events, exports, prints, downloads, notifications, backup, and health checks.
+
 ## Roles
 
 Roles are permission bundles, not hard-coded logic. Clinical access for administrators is still audited.
@@ -135,6 +152,21 @@ The codebase should keep these engines explicit and reusable:
 - Settings engine
 - Backup engine
 
+## Database Coverage
+
+The PostgreSQL schema covers the first required tables and the blueprint expansion areas:
+
+- Access and configuration: users, roles, permissions, role permissions, user roles, branches, departments, rooms, settings, numbering sequences.
+- Patient flow: patients, contacts, identifiers, consents, documents, appointments, queue tickets.
+- Revenue cycle: services, products, packages, package items, price versions, orders, order items, invoices, payments, discounts, refunds, cashier sessions.
+- LIS: lab orders, specimens, lab results, lab result items, lab approvals, result amendments.
+- Inventory and procurement: inventory items, stock batches, stock movements, suppliers, purchase requests, purchase orders, receiving records.
+- HR: employees, shifts, attendance logs, leave requests, training records, license records.
+- Communications and files: notifications, email templates, SMS templates, notification logs, files.
+- Governance and operations: approval requests, audit logs, reports, imports, backup jobs, system health checks.
+
+The schema intentionally keeps price/package versions, locked financial documents, private file references, soft-delete fields, reason fields, and maker-checker constraints visible because those are failure-prone healthcare controls.
+
 ## Required Business Rules
 
 - A released lab result cannot be edited directly.
@@ -146,6 +178,18 @@ The codebase should keep these engines explicit and reusable:
 - A patient merge requires approval.
 - No sensitive action can bypass audit logging.
 - No production deployment can proceed without a backup.
+
+## Regression Guardrails
+
+`npm test` executes focused checks for:
+
+- Race-safe number format helpers used by the prototype.
+- Role permission denials for receptionist, cashier, manager, and super admin paths.
+- Maker-checker self-approval blocking.
+- Laboratory workflow transition restrictions.
+- Payment balance and voided invoice restrictions.
+- Inventory status calculation.
+- Static button/action wiring, so visible buttons do not silently do nothing.
 
 ## Reason-Required Actions
 

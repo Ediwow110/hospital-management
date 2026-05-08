@@ -6,13 +6,14 @@ This repository is initialized from the Hospital Management System all-in-one bl
 
 ## What Is Implemented Now
 
-This first commit set establishes the project foundation requested by the blueprint:
+This implementation converts the blueprint into a static, testable HMS prototype plus database and implementation artifacts:
 
-- Static Bootstrap 5 staff interface for the first screens
-- Interactive demo flow for patient registration to CBC result print preview
-- PostgreSQL schema for first required tables and next-priority operational tables
-- Seed data for roles, granular permissions, starter services, and numbering prefixes
-- Documentation for implementation scope, workflows, security, audit controls, and acceptance tests
+- Bootstrap 5 staff interface covering the first screens plus inventory, HR/access, approvals, notifications, patient portal, cashier closing, settings, backup, and health views
+- Controlled demo flow for registration -> order -> billing/payment -> queue -> specimen custody -> result encoding/validation/approval/release -> QR/print preview -> reports/audit
+- Client-side permission, workflow, approval, notification, audit, payment, and inventory guardrails for prototype validation
+- PostgreSQL schema for the first required tables, next-priority operational tables, and expanded blueprint domains
+- Seed data for roles, granular permissions, demo users, services, packages, inventory, providers, report catalog, templates, and numbering sequences
+- Node-based regression tests for critical business rules and unwired static actions
 
 ## First Screens Covered
 
@@ -27,7 +28,7 @@ This first commit set establishes the project foundation requested by the bluepr
 9. Lab result encoding
 10. Result print preview
 
-The static app also includes reports and audit log screens because the blueprint makes those MVP requirements.
+The static app also includes reports, audit log, approval center, inventory basics, HR offboarding/access, privacy-safe notifications, patient portal, cashier closing, settings, backup, and health screens because the blueprint treats those as workflow or governance requirements.
 
 ## Repository Structure
 
@@ -52,7 +53,13 @@ The static app also includes reports and audit log screens because the blueprint
 
 Open `index.html` in a browser. The prototype uses Bootstrap Icons, Bootstrap, and Chart.js from CDN.
 
-Use the seeded login values shown on the screen, then select **Run CBC demo** or manually follow this flow:
+Use the seeded login values shown on the screen:
+
+- Email: `admin@hospital.local`
+- Password: `HmsDemo2026!`
+- Demo role: `Admin / Super Admin`
+
+Then select **Run CBC demo** or manually follow this flow:
 
 1. Register patient
 2. Create CBC order
@@ -65,15 +72,26 @@ Use the seeded login values shown on the screen, then select **Run CBC demo** or
 9. View reports
 10. View audit log
 
+## Tests
+
+Run the rule and wiring checks with:
+
+```bash
+npm test
+```
+
+The tests cover numbering formats, permission denials, maker-checker approval rules, controlled laboratory transitions, overpayment blocking, status class mapping, inventory status rules, and static `data-action` button wiring.
+
 ## Database
 
 The schema is written for PostgreSQL 15+ and includes:
 
 - First required tables: users, roles, permissions, patients, services, orders, order_items, invoices, payments, audit_logs
 - Supporting access tables: branches, role_permissions, user_roles
-- Next priority tables: lab_orders, lab_results, lab_result_items, inventory_items, stock_movements, approval_requests, notifications, settings
+- Next priority tables: lab_orders, specimens, lab_results, lab_result_items, inventory_items, stock_batches, stock_movements, employees, notifications, approval_requests, settings, files
+- Expanded blueprint domains: departments, rooms, appointments, queue tickets, encounters, vitals, clinical notes, diagnoses, prescriptions, products, packages, price versions, discounts, refunds, cashier sessions, suppliers, purchase requests, purchase orders, receiving records, attendance, leave, training, licenses, templates, reports, imports, backups, and health checks
 
-Important constraints are represented in the schema, including soft-delete fields, audit fields, locked invoices/results, and maker-checker checks that prevent users from approving their own requests.
+Important constraints are represented in the schema, including soft-delete fields, audit fields, locked invoices/results, versioned prices/packages, private files, specimen chain of custody, cashier closing, backup jobs, and maker-checker checks that prevent users from approving their own requests.
 
 ## Build Rules From The Blueprint
 

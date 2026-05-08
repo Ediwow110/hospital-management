@@ -4,6 +4,13 @@ Source: Hospital Management System Strong Production-Level Plan, v1.0, prepared 
 
 This document converts the production blueprint into implementation handoff material for backend, frontend, QA, DevOps, and product stakeholders.
 
+Machine-readable handoff files:
+
+- `api/production-openapi.json`: production API contract, required controls, request schemas, and response schemas.
+- `docs/permission-matrix.json`: role/action/permission matrix with approval, reason, audit, and idempotency flags.
+- `docs/deployment-runbook.md`: deployment, rollback, smoke test, and go/no-go runbook.
+- `tests/production-coverage.test.js`: coverage checks that keep API groups, schema tables, dangerous-action controls, permission matrix rows, and runbook sections from drifting silently.
+
 ## Architecture Standard
 
 Controllers must not directly mutate business records. A write request should follow this path:

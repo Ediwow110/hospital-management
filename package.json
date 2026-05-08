@@ -4,6 +4,6 @@
   "private": true,
   "description": "Static HMS blueprint prototype with workflow, permission, and audit guardrails.",
   "scripts": {
-    "test": "node tests/rules.test.js && node tests/production-rules.test.js"
+    "test": "node tests/rules.test.js && node tests/production-rules.test.js && node tests/production-coverage.test.js"
   }
 }

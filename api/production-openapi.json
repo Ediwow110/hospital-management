@@ -1,0 +1,433 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Hospital Management System Production API",
+    "version": "1.0.0",
+    "description": "Production API contract derived from the May 08, 2026 Strong Production-Level Plan."
+  },
+  "servers": [
+    {
+      "url": "https://api.example-hms.local/v1",
+      "description": "Production base URL placeholder"
+    }
+  ],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "x-production-controls": {
+    "tenantScoped": true,
+    "branchScoped": true,
+    "auditRequiredForSensitiveActions": true,
+    "idempotencyRequiredForHighRiskWrites": true,
+    "rawDatabaseErrorsExposed": false
+  },
+  "paths": {
+    "/auth/login": {
+      "post": {
+        "tags": ["auth"],
+        "summary": "Authenticate staff user",
+        "x-controls": ["rate_limit", "lockout", "audit"],
+        "requestBody": { "$ref": "#/components/requestBodies/LoginRequest" },
+        "responses": { "200": { "$ref": "#/components/responses/AuthSession" }, "401": { "$ref": "#/components/responses/Error" } }
+      }
+    },
+    "/auth/logout": {
+      "post": {
+        "tags": ["auth"],
+        "summary": "End authenticated session",
+        "x-controls": ["audit"],
+        "responses": { "204": { "description": "Logged out" }, "401": { "$ref": "#/components/responses/Error" } }
+      }
+    },
+    "/auth/mfa/verify": {
+      "post": {
+        "tags": ["auth"],
+        "summary": "Verify MFA challenge",
+        "x-controls": ["rate_limit", "audit"],
+        "requestBody": { "$ref": "#/components/requestBodies/OtpRequest" },
+        "responses": { "200": { "$ref": "#/components/responses/AuthSession" }, "422": { "$ref": "#/components/responses/Error" } }
+      }
+    },
+    "/users": {
+      "get": {
+        "tags": ["users"],
+        "summary": "List users",
+        "x-permission": "admin.user.view",
+        "x-controls": ["tenant_scope", "branch_scope"],
+        "responses": { "200": { "$ref": "#/components/responses/ListResponse" } }
+      },
+      "post": {
+        "tags": ["users"],
+        "summary": "Create named user",
+        "x-permission": "admin.user.create",
+        "x-controls": ["tenant_scope", "branch_scope", "audit"],
+        "parameters": [{ "$ref": "#/components/parameters/IdempotencyKey" }],
+        "requestBody": { "$ref": "#/components/requestBodies/UserRequest" },
+        "responses": { "201": { "$ref": "#/components/responses/RecordResponse" }, "422": { "$ref": "#/components/responses/Error" } }
+      }
+    },
+    "/users/{id}/deactivate": {
+      "post": {
+        "tags": ["users"],
+        "summary": "Request or apply user deactivation",
+        "x-permission": "user.deactivate",
+        "x-dangerous-action": true,
+        "x-controls": ["reason", "approval", "audit", "tenant_scope"],
+        "parameters": [{ "$ref": "#/components/parameters/Id" }, { "$ref": "#/components/parameters/IdempotencyKey" }],
+        "requestBody": { "$ref": "#/components/requestBodies/ReasonRequest" },
+        "responses": { "202": { "$ref": "#/components/responses/ApprovalResponse" } }
+      }
+    },
+    "/roles/{id}/permissions": {
+      "post": {
+        "tags": ["roles"],
+        "summary": "Request role permission change",
+        "x-permission": "admin.role.change",
+        "x-dangerous-action": true,
+        "x-controls": ["reason", "approval", "audit"],
+        "parameters": [{ "$ref": "#/components/parameters/Id" }, { "$ref": "#/components/parameters/IdempotencyKey" }],
+        "requestBody": { "$ref": "#/components/requestBodies/RolePermissionRequest" },
+        "responses": { "202": { "$ref": "#/components/responses/ApprovalResponse" } }
+      }
+    },
+    "/patients": {
+      "get": {
+        "tags": ["patients"],
+        "summary": "Search patients",
+        "x-permission": "patient.view",
+        "x-controls": ["tenant_scope", "branch_scope", "data_masking"],
+        "responses": { "200": { "$ref": "#/components/responses/ListResponse" } }
+      },
+      "post": {
+        "tags": ["patients"],
+        "summary": "Register patient",
+        "x-permission": "patient.create",
+        "x-controls": ["tenant_scope", "branch_scope", "duplicate_detection", "audit"],
+        "parameters": [{ "$ref": "#/components/parameters/IdempotencyKey" }],
+        "requestBody": { "$ref": "#/components/requestBodies/PatientRequest" },
+        "responses": { "201": { "$ref": "#/components/responses/RecordResponse" } }
+      }
+    },
+    "/patients/{id}/archive": {
+      "post": {
+        "tags": ["patients"],
+        "summary": "Request patient archive",
+        "x-permission": "patient.archive",
+        "x-dangerous-action": true,
+        "x-controls": ["reason", "approval", "audit"],
+        "parameters": [{ "$ref": "#/components/parameters/Id" }, { "$ref": "#/components/parameters/IdempotencyKey" }],
+        "requestBody": { "$ref": "#/components/requestBodies/ReasonRequest" },
+        "responses": { "202": { "$ref": "#/components/responses/ApprovalResponse" } }
+      }
+    },
+    "/patients/merge-requests": {
+      "post": {
+        "tags": ["patients"],
+        "summary": "Request patient merge",
+        "x-permission": "patient.merge.request",
+        "x-dangerous-action": true,
+        "x-controls": ["reason", "approval", "audit"],
+        "parameters": [{ "$ref": "#/components/parameters/IdempotencyKey" }],
+        "requestBody": { "$ref": "#/components/requestBodies/PatientMergeRequest" },
+        "responses": { "202": { "$ref": "#/components/responses/ApprovalResponse" } }
+      }
+    },
+    "/appointments": {
+      "post": {
+        "tags": ["appointments"],
+        "summary": "Create appointment",
+        "x-permission": "appointment.create",
+        "x-controls": ["tenant_scope", "branch_scope", "notification_job"],
+        "parameters": [{ "$ref": "#/components/parameters/IdempotencyKey" }],
+        "requestBody": { "$ref": "#/components/requestBodies/AppointmentRequest" },
+        "responses": { "201": { "$ref": "#/components/responses/RecordResponse" } }
+      }
+    },
+    "/queue/{id}/call": {
+      "post": {
+        "tags": ["queue"],
+        "summary": "Call queue ticket",
+        "x-permission": "queue.manage",
+        "x-controls": ["status_engine", "queue_event"],
+        "parameters": [{ "$ref": "#/components/parameters/Id" }, { "$ref": "#/components/parameters/IdempotencyKey" }],
+        "responses": { "200": { "$ref": "#/components/responses/RecordResponse" } }
+      }
+    },
+    "/orders": {
+      "post": {
+        "tags": ["orders"],
+        "summary": "Create service order",
+        "x-permission": "order.create",
+        "x-controls": ["price_version_lock", "transaction", "audit"],
+        "parameters": [{ "$ref": "#/components/parameters/IdempotencyKey" }],
+        "requestBody": { "$ref": "#/components/requestBodies/OrderRequest" },
+        "responses": { "201": { "$ref": "#/components/responses/RecordResponse" } }
+      }
+    },
+    "/orders/{id}/void-request": {
+      "post": {
+        "tags": ["orders"],
+        "summary": "Request order void",
+        "x-permission": "order.void.request",
+        "x-dangerous-action": true,
+        "x-controls": ["reason", "approval", "audit"],
+        "parameters": [{ "$ref": "#/components/parameters/Id" }, { "$ref": "#/components/parameters/IdempotencyKey" }],
+        "requestBody": { "$ref": "#/components/requestBodies/ReasonRequest" },
+        "responses": { "202": { "$ref": "#/components/responses/ApprovalResponse" } }
+      }
+    },
+    "/billing/invoices/{id}/payments": {
+      "post": {
+        "tags": ["billing"],
+        "summary": "Post payment",
+        "x-permission": "billing.payment.create",
+        "x-dangerous-action": true,
+        "x-controls": ["idempotency", "balance_validation", "transaction", "audit", "receipt_number_lock"],
+        "parameters": [{ "$ref": "#/components/parameters/Id" }, { "$ref": "#/components/parameters/IdempotencyKey" }],
+        "requestBody": { "$ref": "#/components/requestBodies/PaymentRequest" },
+        "responses": { "201": { "$ref": "#/components/responses/RecordResponse" }, "409": { "$ref": "#/components/responses/Error" } }
+      }
+    },
+    "/billing/payments/{id}/refund-request": {
+      "post": {
+        "tags": ["billing"],
+        "summary": "Request payment refund",
+        "x-permission": "billing.refund.request",
+        "x-dangerous-action": true,
+        "x-controls": ["reason", "approval", "audit"],
+        "parameters": [{ "$ref": "#/components/parameters/Id" }, { "$ref": "#/components/parameters/IdempotencyKey" }],
+        "requestBody": { "$ref": "#/components/requestBodies/ReasonRequest" },
+        "responses": { "202": { "$ref": "#/components/responses/ApprovalResponse" } }
+      }
+    },
+    "/billing/cashier-sessions/{id}/close": {
+      "post": {
+        "tags": ["billing"],
+        "summary": "Close cashier session",
+        "x-permission": "cashier.close",
+        "x-controls": ["reconciliation", "audit", "manager_review_when_variance"],
+        "parameters": [{ "$ref": "#/components/parameters/Id" }, { "$ref": "#/components/parameters/IdempotencyKey" }],
+        "requestBody": { "$ref": "#/components/requestBodies/CashierCloseRequest" },
+        "responses": { "200": { "$ref": "#/components/responses/RecordResponse" } }
+      }
+    },
+    "/lab/orders/{id}/collect": {
+      "post": {
+        "tags": ["lab"],
+        "summary": "Collect specimen",
+        "x-permission": "lab.result.encode",
+        "x-controls": ["status_engine", "chain_of_custody", "barcode"],
+        "parameters": [{ "$ref": "#/components/parameters/Id" }, { "$ref": "#/components/parameters/IdempotencyKey" }],
+        "responses": { "200": { "$ref": "#/components/responses/RecordResponse" } }
+      }
+    },
+    "/lab/results/{id}/encode": {
+      "post": {
+        "tags": ["lab"],
+        "summary": "Encode lab result",
+        "x-permission": "lab.result.encode",
+        "x-controls": ["status_engine", "audit"],
+        "parameters": [{ "$ref": "#/components/parameters/Id" }, { "$ref": "#/components/parameters/IdempotencyKey" }],
+        "requestBody": { "$ref": "#/components/requestBodies/LabEncodeRequest" },
+        "responses": { "200": { "$ref": "#/components/responses/RecordResponse" } }
+      }
+    },
+    "/lab/results/{id}/approve": {
+      "post": {
+        "tags": ["lab"],
+        "summary": "Approve validated lab result",
+        "x-permission": "lab.result.approve",
+        "x-dangerous-action": true,
+        "x-controls": ["dual_approval", "status_engine", "audit"],
+        "parameters": [{ "$ref": "#/components/parameters/Id" }, { "$ref": "#/components/parameters/IdempotencyKey" }],
+        "responses": { "200": { "$ref": "#/components/responses/RecordResponse" } }
+      }
+    },
+    "/lab/results/{id}/release": {
+      "post": {
+        "tags": ["lab"],
+        "summary": "Release approved lab result",
+        "x-permission": "lab.result.release",
+        "x-dangerous-action": true,
+        "x-controls": ["lock_result", "generate_document", "qr_verification", "privacy_safe_notification", "audit"],
+        "parameters": [{ "$ref": "#/components/parameters/Id" }, { "$ref": "#/components/parameters/IdempotencyKey" }],
+        "responses": { "200": { "$ref": "#/components/responses/RecordResponse" } }
+      }
+    },
+    "/lab/results/{id}/amend-request": {
+      "post": {
+        "tags": ["lab"],
+        "summary": "Request released result amendment",
+        "x-permission": "lab.result.amend.request",
+        "x-dangerous-action": true,
+        "x-controls": ["reason", "approval", "audit", "versioning"],
+        "parameters": [{ "$ref": "#/components/parameters/Id" }, { "$ref": "#/components/parameters/IdempotencyKey" }],
+        "requestBody": { "$ref": "#/components/requestBodies/ReasonRequest" },
+        "responses": { "202": { "$ref": "#/components/responses/ApprovalResponse" } }
+      }
+    },
+    "/inventory/receiving": {
+      "post": {
+        "tags": ["inventory"],
+        "summary": "Receive inventory stock",
+        "x-permission": "inventory.receive",
+        "x-controls": ["batch", "expiry", "stock_movement", "audit"],
+        "parameters": [{ "$ref": "#/components/parameters/IdempotencyKey" }],
+        "requestBody": { "$ref": "#/components/requestBodies/ReceivingRequest" },
+        "responses": { "201": { "$ref": "#/components/responses/RecordResponse" } }
+      }
+    },
+    "/inventory/stock-adjustments": {
+      "post": {
+        "tags": ["inventory"],
+        "summary": "Request stock adjustment",
+        "x-permission": "inventory.adjust.request",
+        "x-dangerous-action": true,
+        "x-controls": ["reason", "approval", "audit"],
+        "parameters": [{ "$ref": "#/components/parameters/IdempotencyKey" }],
+        "requestBody": { "$ref": "#/components/requestBodies/InventoryAdjustmentRequest" },
+        "responses": { "202": { "$ref": "#/components/responses/ApprovalResponse" } }
+      }
+    },
+    "/hr/employees/{id}/offboard": {
+      "post": {
+        "tags": ["hr"],
+        "summary": "Request employee offboarding and access revocation",
+        "x-permission": "hr.offboard.request",
+        "x-dangerous-action": true,
+        "x-controls": ["reason", "approval", "access_revocation", "audit"],
+        "parameters": [{ "$ref": "#/components/parameters/Id" }, { "$ref": "#/components/parameters/IdempotencyKey" }],
+        "requestBody": { "$ref": "#/components/requestBodies/ReasonRequest" },
+        "responses": { "202": { "$ref": "#/components/responses/ApprovalResponse" } }
+      }
+    },
+    "/reports/{code}/export": {
+      "post": {
+        "tags": ["reports"],
+        "summary": "Request report export",
+        "x-permission": "report.export",
+        "x-dangerous-action": true,
+        "x-controls": ["reason", "reason_for_sensitive_reports", "background_job", "audit"],
+        "parameters": [{ "$ref": "#/components/parameters/Code" }, { "$ref": "#/components/parameters/IdempotencyKey" }],
+        "requestBody": { "$ref": "#/components/requestBodies/ReportExportRequest" },
+        "responses": { "202": { "$ref": "#/components/responses/JobResponse" } }
+      }
+    },
+    "/notifications/send": {
+      "post": {
+        "tags": ["notifications"],
+        "summary": "Send privacy-safe notification",
+        "x-permission": "notification.send",
+        "x-controls": ["privacy_filter", "template_version", "provider_log"],
+        "parameters": [{ "$ref": "#/components/parameters/IdempotencyKey" }],
+        "requestBody": { "$ref": "#/components/requestBodies/NotificationRequest" },
+        "responses": { "202": { "$ref": "#/components/responses/JobResponse" } }
+      }
+    },
+    "/admin/backups": {
+      "post": {
+        "tags": ["admin"],
+        "summary": "Run encrypted backup",
+        "x-permission": "backup.run",
+        "x-dangerous-action": true,
+        "x-controls": ["background_job", "encrypted_storage", "audit"],
+        "parameters": [{ "$ref": "#/components/parameters/IdempotencyKey" }],
+        "responses": { "202": { "$ref": "#/components/responses/JobResponse" } }
+      }
+    },
+    "/admin/restore-requests": {
+      "post": {
+        "tags": ["admin"],
+        "summary": "Request backup restore",
+        "x-permission": "backup.restore.request",
+        "x-dangerous-action": true,
+        "x-controls": ["reason", "approval", "audit", "maintenance_mode"],
+        "parameters": [{ "$ref": "#/components/parameters/IdempotencyKey" }],
+        "requestBody": { "$ref": "#/components/requestBodies/ReasonRequest" },
+        "responses": { "202": { "$ref": "#/components/responses/ApprovalResponse" } }
+      }
+    },
+    "/admin/health": {
+      "get": {
+        "tags": ["admin"],
+        "summary": "System health status",
+        "x-permission": "system.health.view",
+        "x-controls": ["database", "storage", "backup", "email", "sms", "failed_jobs", "workers", "pdf", "reports", "integrations"],
+        "responses": { "200": { "$ref": "#/components/responses/HealthResponse" } }
+      }
+    },
+    "/audit/logs": {
+      "get": {
+        "tags": ["audit"],
+        "summary": "Search audit logs",
+        "x-permission": "audit.view",
+        "x-controls": ["tenant_scope", "branch_scope", "data_masking"],
+        "responses": { "200": { "$ref": "#/components/responses/ListResponse" } }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": { "type": "http", "scheme": "bearer", "bearerFormat": "JWT" }
+    },
+    "parameters": {
+      "Id": { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } },
+      "Code": { "name": "code", "in": "path", "required": true, "schema": { "type": "string" } },
+      "IdempotencyKey": { "name": "Idempotency-Key", "in": "header", "required": true, "schema": { "type": "string", "minLength": 12 } }
+    },
+    "requestBodies": {
+      "LoginRequest": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/LoginRequest" } } } },
+      "OtpRequest": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/OtpRequest" } } } },
+      "UserRequest": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/UserRequest" } } } },
+      "PatientRequest": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PatientRequest" } } } },
+      "PatientMergeRequest": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PatientMergeRequest" } } } },
+      "AppointmentRequest": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AppointmentRequest" } } } },
+      "OrderRequest": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/OrderRequest" } } } },
+      "PaymentRequest": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PaymentRequest" } } } },
+      "CashierCloseRequest": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CashierCloseRequest" } } } },
+      "LabEncodeRequest": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/LabEncodeRequest" } } } },
+      "ReceivingRequest": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ReceivingRequest" } } } },
+      "InventoryAdjustmentRequest": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/InventoryAdjustmentRequest" } } } },
+      "ReportExportRequest": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ReportExportRequest" } } } },
+      "NotificationRequest": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/NotificationRequest" } } } },
+      "RolePermissionRequest": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/RolePermissionRequest" } } } },
+      "ReasonRequest": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ReasonRequest" } } } }
+    },
+    "responses": {
+      "AuthSession": { "description": "Authenticated session", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AuthSession" } } } },
+      "RecordResponse": { "description": "Record response", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/RecordResponse" } } } },
+      "ApprovalResponse": { "description": "Approval request response", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ApprovalResponse" } } } },
+      "JobResponse": { "description": "Background job response", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/JobResponse" } } } },
+      "HealthResponse": { "description": "System health response", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/HealthResponse" } } } },
+      "ListResponse": { "description": "List response", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ListResponse" } } } },
+      "Error": { "description": "Structured error response", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
+    },
+    "schemas": {
+      "LoginRequest": { "type": "object", "required": ["email", "password"], "properties": { "email": { "type": "string", "format": "email" }, "password": { "type": "string", "minLength": 12 }, "deviceInfo": { "type": "string" } } },
+      "OtpRequest": { "type": "object", "required": ["challengeId", "otp"], "properties": { "challengeId": { "type": "string" }, "otp": { "type": "string", "minLength": 6 } } },
+      "UserRequest": { "type": "object", "required": ["email", "fullName", "roleCodes", "branchIds"], "properties": { "email": { "type": "string", "format": "email" }, "fullName": { "type": "string" }, "roleCodes": { "type": "array", "items": { "type": "string" } }, "branchIds": { "type": "array", "items": { "type": "string" } } } },
+      "PatientRequest": { "type": "object", "required": ["firstName", "lastName", "birthdate", "sex", "mobile"], "properties": { "firstName": { "type": "string" }, "lastName": { "type": "string" }, "birthdate": { "type": "string", "format": "date" }, "sex": { "type": "string", "enum": ["female", "male", "other", "undisclosed"] }, "mobile": { "type": "string" }, "email": { "type": "string" }, "address": { "type": "string" } } },
+      "PatientMergeRequest": { "type": "object", "required": ["sourcePatientId", "targetPatientId", "reason"], "properties": { "sourcePatientId": { "type": "string" }, "targetPatientId": { "type": "string" }, "reason": { "type": "string", "minLength": 5 } } },
+      "AppointmentRequest": { "type": "object", "required": ["patientId", "appointmentAt", "serviceIds"], "properties": { "patientId": { "type": "string" }, "appointmentAt": { "type": "string", "format": "date-time" }, "serviceIds": { "type": "array", "items": { "type": "string" } } } },
+      "OrderRequest": { "type": "object", "required": ["patientId", "items"], "properties": { "patientId": { "type": "string" }, "items": { "type": "array", "items": { "type": "object", "required": ["serviceId"], "properties": { "serviceId": { "type": "string" }, "quantity": { "type": "number", "minimum": 1 } } } } } },
+      "PaymentRequest": { "type": "object", "required": ["paymentMode", "amount"], "properties": { "paymentMode": { "type": "string" }, "amount": { "type": "number", "exclusiveMinimum": 0 }, "referenceNo": { "type": "string" } } },
+      "CashierCloseRequest": { "type": "object", "required": ["actualCash", "remarks"], "properties": { "actualCash": { "type": "number", "minimum": 0 }, "remarks": { "type": "string", "minLength": 3 } } },
+      "LabEncodeRequest": { "type": "object", "required": ["items"], "properties": { "items": { "type": "array", "items": { "type": "object", "required": ["analyte", "resultValue"], "properties": { "analyte": { "type": "string" }, "resultValue": { "type": "string" }, "unit": { "type": "string" }, "referenceRange": { "type": "string" } } } }, "comments": { "type": "string" } } },
+      "ReceivingRequest": { "type": "object", "required": ["inventoryItemId", "supplierId", "batchNo", "expiryDate", "quantity"], "properties": { "inventoryItemId": { "type": "string" }, "supplierId": { "type": "string" }, "batchNo": { "type": "string" }, "expiryDate": { "type": "string", "format": "date" }, "quantity": { "type": "number", "exclusiveMinimum": 0 } } },
+      "InventoryAdjustmentRequest": { "type": "object", "required": ["inventoryItemId", "quantity", "reason"], "properties": { "inventoryItemId": { "type": "string" }, "quantity": { "type": "number" }, "reason": { "type": "string", "minLength": 5 } } },
+      "ReportExportRequest": { "type": "object", "required": ["format", "filters"], "properties": { "format": { "type": "string", "enum": ["xlsx", "csv", "pdf"] }, "filters": { "type": "object" }, "reason": { "type": "string" } } },
+      "NotificationRequest": { "type": "object", "required": ["recipientType", "recipientId", "templateCode"], "properties": { "recipientType": { "type": "string" }, "recipientId": { "type": "string" }, "templateCode": { "type": "string" }, "channel": { "type": "string", "enum": ["in_app", "email", "sms"] } } },
+      "RolePermissionRequest": { "type": "object", "required": ["permissionCodes", "reason"], "properties": { "permissionCodes": { "type": "array", "items": { "type": "string" } }, "reason": { "type": "string", "minLength": 5 } } },
+      "ReasonRequest": { "type": "object", "required": ["reason"], "properties": { "reason": { "type": "string", "minLength": 5 }, "keyword": { "type": "string" } } },
+      "AuthSession": { "type": "object", "required": ["accessToken", "user"], "properties": { "accessToken": { "type": "string" }, "user": { "type": "object" } } },
+      "RecordResponse": { "type": "object", "required": ["data"], "properties": { "data": { "type": "object" } } },
+      "ApprovalResponse": { "type": "object", "required": ["approvalRequest"], "properties": { "approvalRequest": { "type": "object" } } },
+      "JobResponse": { "type": "object", "required": ["job"], "properties": { "job": { "type": "object" } } },
+      "HealthResponse": { "type": "object", "required": ["status", "components"], "properties": { "status": { "type": "string" }, "components": { "type": "object" } } },
+      "ListResponse": { "type": "object", "required": ["data"], "properties": { "data": { "type": "array", "items": { "type": "object" } }, "meta": { "type": "object" } } },
+      "ErrorResponse": { "type": "object", "required": ["error"], "properties": { "error": { "type": "object", "required": ["code", "message", "request_id"], "properties": { "code": { "type": "string" }, "message": { "type": "string" }, "request_id": { "type": "string" } } } } }
+    }
+  }
+}

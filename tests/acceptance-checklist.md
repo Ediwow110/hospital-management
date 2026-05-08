@@ -95,4 +95,8 @@ Use this checklist for UAT and regression testing against the blueprint.
 - [ ] JavaScript syntax check passes with `node --check assets/js/app.js`.
 - [ ] Production rules syntax check passes with `node --check src/core/production-rules.js`.
 - [ ] Static action wiring check reports no missing `data-action` handlers.
+- [ ] `api/production-openapi.json` parses and covers all first API groups.
+- [ ] Dangerous API routes include audit, idempotency, and reason controls where required.
+- [ ] `docs/permission-matrix.json` covers critical role/action permissions.
+- [ ] `docs/deployment-runbook.md` includes pre-deployment, smoke test, rollback, and go/no-go gates.
 - [ ] SQL files pass basic quote and parenthesis balance checks.

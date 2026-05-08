@@ -204,6 +204,13 @@ The schema intentionally keeps price/package versions, locked financial document
 
 `docs/production-technical-spec.md` is the implementation handoff requested by the production plan. It defines API groups, request/response rules, permission matrix, workflow diagrams, UI production requirements, deployment gates, and the production test matrix.
 
+The handoff is backed by machine-checkable files:
+
+- `api/production-openapi.json`
+- `docs/permission-matrix.json`
+- `docs/deployment-runbook.md`
+- `tests/production-coverage.test.js`
+
 ## Reason-Required Actions
 
 - Void order/payment

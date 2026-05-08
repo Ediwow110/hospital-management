@@ -13,6 +13,9 @@ This implementation converts the blueprint into a static, testable HMS prototype
 - Controlled demo flow for registration -> order -> billing/payment -> queue -> specimen custody -> result encoding/validation/approval/release -> QR/print preview -> reports/audit
 - Client-side permission, workflow, approval, notification, audit, payment, and inventory guardrails for prototype validation
 - Service-layer style production rule module in `src/core/production-rules.js` for tenant isolation, approval, workflow, payment, notification, and audit checks
+- Machine-readable production API contract in `api/production-openapi.json`
+- Machine-readable permission matrix in `docs/permission-matrix.json`
+- Deployment and rollback runbook in `docs/deployment-runbook.md`
 - PostgreSQL schema for the first required tables, next-priority operational tables, and expanded blueprint domains
 - Seed data for roles, granular permissions, demo users, services, packages, inventory, providers, report catalog, templates, and numbering sequences
 - Node-based regression tests for critical business rules and unwired static actions
@@ -42,6 +45,8 @@ The static app also includes reports, audit log, approval center, inventory basi
 ├── assets/
 │   ├── css/styles.css
 │   └── js/app.js
+├── api/
+│   └── production-openapi.json
 ├── database/
 │   ├── schema.sql
 │   └── seed.sql
@@ -49,6 +54,8 @@ The static app also includes reports, audit log, approval center, inventory basi
 │   └── core/production-rules.js
 ├── docs/
 │   ├── blueprint-implementation.md
+│   ├── deployment-runbook.md
+│   ├── permission-matrix.json
 │   ├── production-technical-spec.md
 │   ├── security-audit.md
 │   └── workflows.md
@@ -88,7 +95,7 @@ Run the rule and wiring checks with:
 npm test
 ```
 
-The tests cover numbering formats, permission denials, maker-checker approval rules, tenant/branch isolation, controlled laboratory transitions, overpayment and duplicate submission blocking, status class mapping, inventory status rules, notification privacy, feature flags, and static `data-action` button wiring.
+The tests cover numbering formats, permission denials, maker-checker approval rules, tenant/branch isolation, controlled laboratory transitions, overpayment and duplicate submission blocking, status class mapping, inventory status rules, notification privacy, feature flags, static `data-action` button wiring, API group coverage, dangerous API controls, required schema tables, permission matrix coverage, and deployment runbook sections.
 
 ## Database
 

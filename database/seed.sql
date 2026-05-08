@@ -312,3 +312,161 @@ SELECT id, 'notification.providers', '{"transactional_primary":"Amazon SES","tra
 FROM branches
 WHERE code = 'MAIN'
 ON CONFLICT (branch_id, key) DO NOTHING;
+
+-- Production-level SaaS packaging, templates, payment methods, health, and handoff data.
+
+INSERT INTO tenants (code, name)
+VALUES ('demo-clinic', 'Demo Clinic Tenant')
+ON CONFLICT (code) DO NOTHING;
+
+UPDATE branches
+SET tenant_id = tenants.id
+FROM tenants
+WHERE branches.code = 'MAIN'
+  AND tenants.code = 'demo-clinic'
+  AND branches.tenant_id IS NULL;
+
+UPDATE users
+SET tenant_id = tenants.id
+FROM tenants
+WHERE tenants.code = 'demo-clinic'
+  AND users.tenant_id IS NULL;
+
+INSERT INTO subscription_plans (code, name, description)
+VALUES
+('starter_clinic', 'Starter Clinic', 'Patients, orders, billing, receipts, and basic reports.'),
+('diagnostic_center', 'Diagnostic Center', 'Starter plus LIS, queue, inventory, result printing, and QR verification.'),
+('advanced_clinic', 'Advanced Clinic', 'Diagnostic Center plus appointments, EMR, prescriptions, patient portal, and notifications.'),
+('enterprise', 'Enterprise', 'Advanced plus multi-branch, HR, procurement, corporate billing, analytics, and integrations.')
+ON CONFLICT (code) DO NOTHING;
+
+INSERT INTO tenant_subscriptions (tenant_id, subscription_plan_id, status)
+SELECT t.id, p.id, 'active'
+FROM tenants t
+JOIN subscription_plans p ON p.code = 'enterprise'
+WHERE t.code = 'demo-clinic'
+ON CONFLICT (tenant_id, subscription_plan_id) DO NOTHING;
+
+INSERT INTO feature_flags (code, name, description)
+VALUES
+('enable_lis', 'LIS', 'Laboratory workflow and result release.'),
+('enable_emr', 'EMR', 'Clinical encounters, notes, prescriptions, and certificates.'),
+('enable_hr', 'HR', 'Employee, attendance, leave, training, and licenses.'),
+('enable_inventory', 'Inventory', 'Inventory, procurement, stock batches, and physical counts.'),
+('enable_patient_portal', 'Patient Portal', 'Patient OTP access, requests, billing, and released documents.'),
+('enable_sms', 'SMS', 'SMS notification channel.'),
+('enable_multi_branch', 'Multi-branch', 'Tenant-specific branch operations.'),
+('enable_referrals', 'Referrals', 'Referral partner and rebate tracking.'),
+('enable_pharmacy', 'Pharmacy', 'Medication catalog and dispensing.'),
+('enable_radiology', 'Radiology', 'Radiology reports and attachments.')
+ON CONFLICT (code) DO NOTHING;
+
+INSERT INTO tenant_feature_flags (tenant_id, feature_code, enabled)
+SELECT t.id, f.code, true
+FROM tenants t
+CROSS JOIN feature_flags f
+WHERE t.code = 'demo-clinic'
+ON CONFLICT (tenant_id, feature_code) DO NOTHING;
+
+INSERT INTO payment_methods (code, name, requires_reference)
+VALUES
+('cash', 'Cash', false),
+('gcash', 'GCash', true),
+('maya', 'Maya', true),
+('bank_transfer', 'Bank Transfer', true),
+('credit_card', 'Credit Card', true),
+('hmo', 'HMO', true),
+('corporate', 'Corporate Account', true),
+('employee_deduction', 'Employee Deduction', true)
+ON CONFLICT (code) DO NOTHING;
+
+INSERT INTO inventory_categories (code, name, requires_expiry)
+VALUES
+('lab_reagents', 'Laboratory reagents', true),
+('lab_consumables', 'Lab consumables', true),
+('medicines', 'Medicines', true),
+('medical_supplies', 'Medical supplies', true),
+('office_supplies', 'Office supplies', false),
+('equipment', 'Equipment', false),
+('maintenance', 'Maintenance items', false)
+ON CONFLICT (code) DO NOTHING;
+
+INSERT INTO print_templates (template_code, template_type, name)
+VALUES
+('lab_result_standard', 'lab_result', 'Standard Laboratory Result'),
+('receipt_standard', 'receipt', 'Official Receipt'),
+('invoice_standard', 'invoice', 'Invoice'),
+('prescription_standard', 'prescription', 'Prescription'),
+('medical_certificate_standard', 'medical_certificate', 'Medical Certificate'),
+('queue_ticket_standard', 'queue_ticket', 'Queue Ticket'),
+('barcode_label_standard', 'barcode_label', 'Specimen Barcode Label'),
+('purchase_order_standard', 'purchase_order', 'Purchase Order'),
+('employee_certificate_standard', 'employee_certificate', 'Employee Certificate')
+ON CONFLICT (template_code) DO NOTHING;
+
+INSERT INTO template_versions (print_template_id, version, content, created_by)
+SELECT pt.id, 1, 'Versioned production template placeholder for ' || pt.name, u.id
+FROM print_templates pt
+LEFT JOIN users u ON u.email = 'admin@hospital.local'
+ON CONFLICT (print_template_id, version) DO NOTHING;
+
+INSERT INTO lab_templates (template_code, name, version, created_by)
+SELECT 'cbc', 'Complete Blood Count', 1, u.id
+FROM users u
+WHERE u.email = 'admin@hospital.local'
+ON CONFLICT (template_code, version) DO NOTHING;
+
+INSERT INTO lab_template_items (lab_template_id, analyte, unit, reference_range, display_order, critical_low, critical_high)
+SELECT lt.id, analyte, unit, reference_range, display_order, critical_low, critical_high
+FROM lab_templates lt
+CROSS JOIN (VALUES
+    ('Hemoglobin', 'g/dL', '12.0-16.0', 1, 7.0, 20.0),
+    ('WBC', '10^9/L', '4.0-10.0', 2, 2.0, 30.0),
+    ('Platelet', '10^9/L', '150-400', 3, 20.0, 1000.0)
+) AS items(analyte, unit, reference_range, display_order, critical_low, critical_high)
+WHERE lt.template_code = 'cbc'
+  AND lt.version = 1
+ON CONFLICT (lab_template_id, analyte) DO NOTHING;
+
+INSERT INTO operating_hours (branch_id, day_of_week, opens_at, closes_at, is_closed)
+SELECT b.id, day_no, TIME '08:00', TIME '17:00', false
+FROM branches b
+CROSS JOIN generate_series(1, 6) AS day_no
+WHERE b.code = 'MAIN'
+ON CONFLICT (branch_id, day_of_week) DO NOTHING;
+
+INSERT INTO external_integrations (tenant_id, integration_code, integration_type, status, config)
+SELECT t.id, integration_code, integration_type, 'active', config::jsonb
+FROM tenants t
+CROSS JOIN (VALUES
+    ('amazon_ses', 'email', '{"purpose":"transactional_primary"}'),
+    ('postmark', 'email', '{"purpose":"transactional_fallback"}'),
+    ('sms_provider', 'sms', '{"purpose":"otp_and_notifications"}'),
+    ('qr_verification', 'verification', '{"public_result_details":"masked"}'),
+    ('private_file_storage', 'storage', '{"signed_urls":true}')
+) AS integrations(integration_code, integration_type, config)
+WHERE t.code = 'demo-clinic'
+ON CONFLICT (tenant_id, integration_code) DO NOTHING;
+
+INSERT INTO system_health_logs (component, status, metric_value, details)
+VALUES
+('application', 'ok', 'online', '{"checked_by":"seed"}'::jsonb),
+('database', 'ok', 'reachable', '{"checked_by":"seed"}'::jsonb),
+('storage', 'ok', 'private', '{"checked_by":"seed"}'::jsonb),
+('backup', 'ok', 'encrypted', '{"restore_test_required":true}'::jsonb),
+('email', 'ok', 'configured', '{"provider":"Amazon SES"}'::jsonb),
+('sms', 'ok', 'configured', '{"privacy_safe_templates":true}'::jsonb),
+('queue_workers', 'ok', 'idle', '{"failed_jobs":0}'::jsonb),
+('pdf_generation', 'ok', 'available', '{"templates_versioned":true}'::jsonb);
+
+INSERT INTO referrers (branch_id, referrer_code, name, referrer_type)
+SELECT b.id, 'REF-DEMO-001', 'Demo Referral Partner', 'clinic'
+FROM branches b
+WHERE b.code = 'MAIN'
+ON CONFLICT (referrer_code) DO NOTHING;
+
+INSERT INTO settings (branch_id, key, value)
+SELECT id, 'feature.flags', '{"enable_lis":true,"enable_emr":true,"enable_hr":true,"enable_inventory":true,"enable_patient_portal":true,"enable_sms":true,"enable_multi_branch":true,"enable_referrals":true,"enable_pharmacy":true,"enable_radiology":true}'::jsonb
+FROM branches
+WHERE code = 'MAIN'
+ON CONFLICT (branch_id, key) DO NOTHING;

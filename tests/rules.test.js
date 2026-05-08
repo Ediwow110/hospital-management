@@ -64,7 +64,7 @@ function testNoUnwiredStaticActions() {
   const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
   const js = fs.readFileSync(path.join(root, 'assets/js/app.js'), 'utf8');
   const actionNames = new Set([...`${html}\n${js}`.matchAll(/data-action="([^"]+)"/g)].map(match => match[1]));
-  const actionBlock = js.match(/const actions = \{([\s\S]*?)\n\};\n\nfunction exportWithAudit/);
+  const actionBlock = js.match(/const actions = \{([\s\S]*?)\r?\n\};\r?\n\r?\nfunction exportWithAudit/);
   assert.ok(actionBlock, 'actions block should be discoverable');
   const handlerNames = new Set([
     ...[...actionBlock[1].matchAll(/\n\s*([A-Za-z0-9_]+):/g)].map(match => match[1]),

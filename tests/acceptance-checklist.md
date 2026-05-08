@@ -11,8 +11,12 @@ Use this checklist for UAT and regression testing against the blueprint.
 - [ ] System creates an order number in `ORD-YYYY-000001` format.
 - [ ] Cashier posts a payment.
 - [ ] System creates an invoice and receipt number.
+- [ ] Receipt print preview opens only after a posted payment.
+- [ ] Receipt print action is audit-logged.
 - [ ] Queue ticket is created after payment.
 - [ ] Med-tech encodes result values.
+- [ ] Patient identity header is visible on patient-related workflow screens.
+- [ ] Result approval screen shows payment, specimen, encoding, dual-approval, and locking checks.
 - [ ] Authorized approver validates and approves the result.
 - [ ] Result print preview shows lab number and QR verification placeholder.
 - [ ] Sales report updates are visible.
@@ -28,10 +32,13 @@ Use this checklist for UAT and regression testing against the blueprint.
 - [ ] Cashier cannot approve their own refund.
 - [ ] User cannot approve their own void, discount, amendment, inventory adjustment, merge, or role-change request.
 - [ ] Report export is permission-checked and audit-logged.
+- [ ] Tenant and branch scoping prevents cross-tenant or cross-branch record access.
+- [ ] Feature flags prevent disabled module usage.
 
 ## Billing Tests
 
 - [ ] Payment cannot exceed invoice balance unless overpayment is enabled.
+- [ ] Duplicate high-risk payment submission is blocked by idempotency key.
 - [ ] Voided order cannot be paid.
 - [ ] Paid invoice is locked.
 - [ ] Receipt numbers are never reused.
@@ -44,6 +51,8 @@ Use this checklist for UAT and regression testing against the blueprint.
 - [ ] Amendment creates a new result version and supersedes the prior version.
 - [ ] Critical result requires notification and acknowledgement.
 - [ ] Result download or print is audit-logged.
+- [ ] Result-ready notice cannot be sent before release.
+- [ ] QR verification displays masked authenticity details only.
 
 ## Inventory Tests
 
@@ -60,6 +69,17 @@ Use this checklist for UAT and regression testing against the blueprint.
 - [ ] Email/SMS notifications do not expose medical content.
 - [ ] Private files are not exposed through public patient-detail URLs.
 - [ ] Backup exists before production deployment.
+- [ ] Restore testing is documented.
+- [ ] Failed jobs, backup status, queue workers, report export failures, and integration status are visible on system health.
+
+## Production API / Service Tests
+
+- [ ] Controllers call services rather than directly mutating domain records.
+- [ ] Write endpoints validate request body and branch/tenant scope.
+- [ ] High-risk write endpoints require `Idempotency-Key`.
+- [ ] Background jobs handle email, SMS, PDF, export, import, and backup work.
+- [ ] Raw database errors are never exposed to users.
+- [ ] Maintenance mode and rollback plan are documented before disruptive deployment.
 
 ## UI Wiring Tests
 
@@ -73,5 +93,6 @@ Use this checklist for UAT and regression testing against the blueprint.
 
 - [ ] `npm test` passes.
 - [ ] JavaScript syntax check passes with `node --check assets/js/app.js`.
+- [ ] Production rules syntax check passes with `node --check src/core/production-rules.js`.
 - [ ] Static action wiring check reports no missing `data-action` handlers.
 - [ ] SQL files pass basic quote and parenthesis balance checks.

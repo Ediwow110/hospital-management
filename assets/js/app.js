@@ -1053,6 +1053,7 @@ function runDemo() {
 
 function renderAll() {
   renderTopbar();
+  renderPatientHeaders();
   renderDashboard();
   renderPatients();
   renderServices();
@@ -1062,7 +1063,9 @@ function renderAll() {
   renderCashier();
   renderQueue();
   renderLab();
+  renderLabApproval();
   renderPrint();
+  renderReceipt();
   renderInventory();
   renderEmployees();
   renderNotifications();
@@ -1081,6 +1084,34 @@ function renderTopbar() {
   document.querySelector('#topbar-role').textContent = roleLabel(state.currentUser.role);
   const unread = state.notifications.some(notification => notification.status === 'queued' || notification.status === 'failed');
   document.querySelector('#notification-dot').classList.toggle('d-none', !unread);
+}
+
+function renderPatientHeaders() {
+  const patient = currentPatient();
+  if (!patient) return;
+  const unpaidBalance = state.invoices
+    .filter(invoice => invoice.patientId === patient.id && ['Unpaid', 'Partially Paid'].includes(invoice.status))
+    .reduce((sum, invoice) => sum + invoice.balance, 0);
+  const criticalFlags = state.labOrders
+    .filter(order => order.patientId === patient.id)
+    .flatMap(order => state.labResults.filter(result => result.labNo === order.labNo))
+    .flatMap(result => result.items)
+    .filter(item => item.critical).length;
+  const alerts = [
+    patient.duplicateRisk ? 'Duplicate review' : null,
+    unpaidBalance > 0 ? `Unpaid ${money(unpaidBalance)}` : null,
+    criticalFlags > 0 ? `${criticalFlags} critical result flag` : null
+  ].filter(Boolean);
+  const html = `
+    <div class="patient-context-item"><span>Patient</span><strong>${escapeHtml(patient.id)} - ${escapeHtml(patient.name)}</strong></div>
+    <div class="patient-context-item"><span>Age / Sex</span><strong>${ageFromBirthdate(patient.birthdate)} / ${escapeHtml(patient.sex)}</strong></div>
+    <div class="patient-context-item"><span>Birthdate</span><strong>${escapeHtml(patient.birthdate)}</strong></div>
+    <div class="patient-context-item"><span>Contact</span><strong>${escapeHtml(patient.contact)}</strong></div>
+    <div class="patient-context-item ${alerts.length ? 'patient-context-alert' : ''}"><span>Category / Alerts</span><strong>${escapeHtml(patient.classification)}${alerts.length ? ` | ${escapeHtml(alerts.join(', '))}` : ' | No active alert'}</strong></div>
+  `;
+  document.querySelectorAll('[data-patient-header]').forEach(header => {
+    header.innerHTML = html;
+  });
 }
 
 function renderDashboard() {
@@ -1271,6 +1302,33 @@ function renderLab() {
   document.querySelector('#lab-comments').disabled = locked;
 }
 
+function renderLabApproval() {
+  const labOrder = currentLabOrder();
+  const result = currentLabResult();
+  if (!labOrder || !result) return;
+  const status = document.querySelector('#approval-lab-status');
+  if (status) {
+    status.textContent = result.status;
+    status.className = `badge ${statusClass(result.status)}`;
+  }
+  const checklist = [
+    ['Payment confirmed', state.orders.some(order => order.no === labOrder.orderNo && order.paymentStatus === 'Paid')],
+    ['Specimen received', ['Received', 'Processing', 'Encoded', 'Validated', 'Approved', 'Released'].includes(labOrder.status)],
+    ['Result encoded', Boolean(result.encodedBy) || ['Encoded', 'Validated', 'Approved', 'Released'].includes(result.status)],
+    ['Dual approval respected', result.encodedBy !== state.currentUser.name || !state.settings.dualApprovalEnabled],
+    ['Released result locked', result.status !== 'Released' || result.isLocked]
+  ];
+  const container = document.querySelector('#approval-checklist');
+  if (container) {
+    container.innerHTML = checklist.map(([label, passed]) => `
+      <div class="settings-row">
+        <div><strong>${escapeHtml(label)}</strong><small class="d-block text-secondary">${passed ? 'Ready' : 'Needs attention'}</small></div>
+        <span class="badge ${passed ? 'status-approved' : 'status-pending'}">${passed ? 'passed' : 'pending'}</span>
+      </div>
+    `).join('');
+  }
+}
+
 function renderPrint() {
   const labOrder = currentLabOrder();
   const result = currentLabResult();
@@ -1281,6 +1339,27 @@ function renderPrint() {
   document.querySelector('#print-items').innerHTML = result.items.map(item => `
     <tr><td>${escapeHtml(item.analyte)}</td><td>${escapeHtml(item.result)}</td><td>${escapeHtml(item.unit)}</td><td>${escapeHtml(item.range)}</td><td>${escapeHtml(item.flag || 'normal')}</td></tr>
   `).join('');
+}
+
+function renderReceipt() {
+  const invoice = currentInvoice();
+  const patient = currentPatient();
+  const container = document.querySelector('#receipt-body');
+  if (!invoice || !container) return;
+  const latestPayment = invoice.payments[0];
+  if (!latestPayment) {
+    container.innerHTML = '<p class="text-secondary">No posted payment for this invoice yet.</p>';
+    return;
+  }
+  container.innerHTML = `
+    <div class="receipt-line"><span>Receipt No.</span><strong>${escapeHtml(latestPayment.receiptNo)}</strong></div>
+    <div class="receipt-line"><span>Invoice No.</span><strong>${escapeHtml(invoice.no)}</strong></div>
+    <div class="receipt-line"><span>Patient</span><strong>${escapeHtml(patient.name)}</strong></div>
+    <div class="receipt-line"><span>Payment mode</span><strong>${escapeHtml(latestPayment.mode)}</strong></div>
+    <div class="receipt-line"><span>Reference</span><strong>${escapeHtml(latestPayment.reference || 'N/A')}</strong></div>
+    <div class="receipt-line"><span>Posted at</span><strong>${escapeHtml(latestPayment.createdAt)}</strong></div>
+    <div class="receipt-line total"><span>Amount paid</span><strong>${money(latestPayment.amount)}</strong></div>
+  `;
 }
 
 function renderInventory() {
@@ -1479,6 +1558,25 @@ const actions = {
   createOrder: createOrderFromSelection,
   requestVoid,
   requestRefund,
+  printReceipt: () => {
+    const invoice = currentInvoice();
+    if (!invoice || !invoice.payments.length) {
+      notify('Receipt unavailable', 'Post a payment before printing a receipt.', 'warning');
+      return;
+    }
+    addAudit('billing', 'receipt.preview', invoice.payments[0].receiptNo, 'Receipt preview opened');
+    renderReceipt();
+    showScreen('receipt');
+  },
+  printReceiptDocument: () => {
+    const invoice = currentInvoice();
+    if (!invoice || !invoice.payments.length) {
+      notify('Print blocked', 'No posted payment exists for this invoice.', 'danger');
+      return;
+    }
+    addAudit('billing', 'receipt.print', invoice.payments[0].receiptNo, 'Official receipt print audit');
+    window.print();
+  },
   previewCashierClosing,
   printQueueTicket: () => { addAudit('queue', 'queue.ticket.print', state.queue[0]?.ticket || 'queue', 'Queue ticket printed'); notify('Queue ticket printed', 'Print action was audit logged.'); },
   callQueue: (_, button) => { const ticket = state.queue.find(item => item.ticket === button.dataset.ticket); if (ticket) { ticket.status = 'Called'; addAudit('queue', 'queue.call', ticket.ticket, 'Patient called to station'); renderAll(); } },
@@ -1488,6 +1586,7 @@ const actions = {
   openLabFromQueue: (_, button) => { const ticket = state.queue.find(item => item.ticket === button.dataset.ticket); if (ticket?.labNo) { state.currentLabNo = ticket.labNo; renderAll(); showScreen('lab'); } },
   encodeResult,
   validateResult,
+  approveResultAction: () => approveResult({ preventDefault() {} }),
   releaseResult,
   requestAmendment,
   openVerification: () => {

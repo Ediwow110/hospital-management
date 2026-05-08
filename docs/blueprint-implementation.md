@@ -2,6 +2,8 @@
 
 Source blueprint: Hospital Management System All-in-One Product, Technical, UI/UX, Security, and Implementation Blueprint, v1.0, 2026-05-08.
 
+Production extension source: Hospital Management System Strong Production-Level Plan, v1.0, 2026-05-08.
+
 ## Product Direction
 
 This project is a workflow-first healthcare operations platform. It must prioritize patient flow, financial control, clinical traceability, inventory control, compliance, auditability, and management visibility.
@@ -67,6 +69,9 @@ The MVP must not include AI assistant features, free-form chat, video calls, ful
 The static app now implements the blueprint as workflow simulation rather than raw CRUD:
 
 - Login enforces strong demo password length and MFA for high-risk roles.
+- Patient-related workflow screens render the production patient identity header.
+- Receipt preview and receipt print actions are separated from billing payment posting.
+- Result approval has a dedicated screen with payment, specimen, encoding, dual-approval, and lock checks.
 - Role permissions are checked before sensitive patient, billing, laboratory, inventory, HR, report, backup, and notification actions.
 - Global search, patient filters, report exports, audit filters, queue actions, result print/verification, notification actions, and settings buttons are wired.
 - Sensitive actions require a reason through a confirmation modal: void, refund, merge, archive, result amendment, inventory adjustment, HR offboarding, backup restore, and sensitive exports.
@@ -78,6 +83,7 @@ The static app now implements the blueprint as workflow simulation rather than r
 - Inventory receiving captures supplier, batch, expiry, and quantity; expired stock issue is blocked without override workflow.
 - HR offboarding routes through access deactivation approval.
 - Audit logging records login/logout, permission denials, patient access, billing events, lab workflow events, exports, prints, downloads, notifications, backup, and health checks.
+- `src/core/production-rules.js` adds service-layer style production guards for tenant/branch isolation, workflows, approvals, dangerous reasons, audit payloads, idempotent payments, notification privacy, numbering, and feature flags.
 
 ## Roles
 
@@ -164,6 +170,8 @@ The PostgreSQL schema covers the first required tables and the blueprint expansi
 - HR: employees, shifts, attendance logs, leave requests, training records, license records.
 - Communications and files: notifications, email templates, SMS templates, notification logs, files.
 - Governance and operations: approval requests, audit logs, reports, imports, backup jobs, system health checks.
+- SaaS and production packaging: tenants, subscription plans, tenant subscriptions, feature flags, tenant feature flags, API tokens, external integrations, failed jobs, system health logs.
+- Expanded production domains: queue events, schedules, medical certificates, clinical attachments, lab templates, result versions, critical result logs, QC logs, invoice items, payment allocations, void requests, cashier closing reports, accounts receivable, physical counts, report exports, template versions, generated documents, radiology, pharmacy, and referrals.
 
 The schema intentionally keeps price/package versions, locked financial documents, private file references, soft-delete fields, reason fields, and maker-checker constraints visible because those are failure-prone healthcare controls.
 
@@ -190,6 +198,11 @@ The schema intentionally keeps price/package versions, locked financial document
 - Payment balance and voided invoice restrictions.
 - Inventory status calculation.
 - Static button/action wiring, so visible buttons do not silently do nothing.
+- Production service-layer checks for tenant scope, branch scope, idempotency, notification privacy, immutable audit payloads, and feature flags.
+
+## Production Handoff
+
+`docs/production-technical-spec.md` is the implementation handoff requested by the production plan. It defines API groups, request/response rules, permission matrix, workflow diagrams, UI production requirements, deployment gates, and the production test matrix.
 
 ## Reason-Required Actions
 

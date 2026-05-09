@@ -1,9 +1,24 @@
 {
   "name": "hospital-management",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
-  "description": "Static HMS blueprint prototype with workflow, permission, and audit guardrails.",
+  "description": "Hospital Management System – backend runtime foundation (PR #3). In-memory adapter. PostgreSQL deferred to PR #4.",
+  "main": "src/api/server.js",
   "scripts": {
-    "test": "node tests/rules.test.js"
-  }
+    "start": "node src/api/server.js",
+    "dev": "node --watch src/api/server.js",
+    "check": "node --check src/api/server.js && node --check src/core/AppContext.js && node --check src/core/AppError.js && node --check src/core/permissions.js && node --check src/core/workflow.js && node --check src/repositories/memory/InMemoryUserRepository.js && node --check src/repositories/memory/InMemoryPatientRepository.js && node --check src/repositories/memory/InMemoryOrderRepository.js && node --check src/repositories/memory/InMemoryInvoiceRepository.js && node --check src/repositories/memory/InMemoryPaymentRepository.js && node --check src/repositories/memory/InMemoryCashierSessionRepository.js && node --check src/repositories/memory/InMemoryLabResultRepository.js && node --check src/repositories/memory/InMemoryInventoryRepository.js && node --check src/repositories/memory/InMemoryAuditLogRepository.js && node --check src/repositories/memory/InMemoryApprovalRepository.js && node --check src/repositories/memory/InMemoryNotificationRepository.js && node --check src/repositories/memory/InMemorySettingsRepository.js && node --check src/services/AuthService.js && node --check src/services/PatientService.js && node --check src/services/OrderService.js && node --check src/services/BillingService.js && node --check src/services/QueueService.js && node --check src/services/LabService.js && node --check src/services/InventoryService.js && node --check src/services/AuditService.js && node --check src/services/HealthService.js && echo \"Syntax check passed.\"",
+    "test": "node tests/rules.test.js && node tests/backend.test.js",
+    "test:backend": "node tests/backend.test.js",
+    "migrate": "echo 'PR #4: PostgreSQL migrations not yet implemented. See migrations/README.md'"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "uuid": "^9.0.1"
+  },
+  "devDependencies": {},
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "license": "UNLICENSED"
 }

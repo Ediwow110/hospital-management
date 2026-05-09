@@ -94,6 +94,10 @@ const ROLE_PERMISSIONS = Object.freeze({
   inventory_staff: [
     PERMISSIONS.INVENTORY_ADJUST_REQUEST,
   ],
+
+  patient: [
+    PERMISSIONS.PATIENT_VIEW,
+  ],
 });
 
 module.exports = { PERMISSIONS, ROLE_PERMISSIONS };

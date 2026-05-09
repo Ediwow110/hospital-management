@@ -8,7 +8,11 @@ class InMemoryPatientRepository extends InMemoryStore {
     const record = this._get(id);
     if (!record) return null;
     if (record.tenantId !== context.tenantId) {
-      throw new AppError(ERROR_CODES.PERMISSION_DENIED, 'Cross-tenant patient access denied');
+      throw new AppError(ERROR_CODES.PERMISSION_DENIED, 'Cross-tenant patient access denied', {
+        crossTenant: true,
+        entityType: 'patient',
+        entityId: id,
+      });
     }
     return record;
   }
@@ -17,6 +21,10 @@ class InMemoryPatientRepository extends InMemoryStore {
     return this._all().find(
       r => r.mrn === mrn && r.tenantId === context.tenantId
     ) ?? null;
+  }
+
+  async findByNumber(number, context, tx) {
+    return this.findByMRN(number, context, tx);
   }
 
   async save(entity, context, tx) {

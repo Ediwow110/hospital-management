@@ -12,11 +12,13 @@
  */
 
 const { buildContainer } = require('../config/container');
+const { validateEnv } = require('../config/validateEnv');
 const { buildApp } = require('./app');
 
 const PORT = parseInt(process.env.PORT || '3000', 10);
 
 try {
+  validateEnv();
   const container = buildContainer();
   const app = buildApp(container);
 

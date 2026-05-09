@@ -1,6 +1,8 @@
 'use strict';
 
 const express = require('express');
+const { AppError, ERROR_CODES } = require('../core/AppError');
+const { PERMISSIONS } = require('../core/permissions');
 
 /**
  * buildRouter — wires all API routes.
@@ -9,10 +11,11 @@ const express = require('express');
  * @param {{ services: object }} container
  * @returns {express.Router}
  */
-function buildRouter(container, authenticate) {
+function buildRouter(container, authenticate, buildLoginRateLimiter) {
   const router = express.Router();
   const { services } = container;
   const auth = authenticate(services.authService);
+  const loginRateLimiter = buildLoginRateLimiter(services.securityAuditService);
 
   // -------------------------------------------------------------------------
   // Health
@@ -24,7 +27,7 @@ function buildRouter(container, authenticate) {
   // -------------------------------------------------------------------------
   // Auth
   // -------------------------------------------------------------------------
-  router.post('/auth/login', async (req, res, next) => {
+  router.post('/auth/login', loginRateLimiter, async (req, res, next) => {
     try {
       const { email, password, tenantId } = req.body;
       if (!email || !password || !tenantId) {
@@ -35,6 +38,18 @@ function buildRouter(container, authenticate) {
         req.ip || '', req.headers['user-agent'] || ''
       );
       res.json(result);
+    } catch (err) {
+      if (err instanceof AppError && err.code === ERROR_CODES.PERMISSION_DENIED) {
+        return res.status(401).json({ error: 'UNAUTHORIZED', message: err.message });
+      }
+      next(err);
+    }
+  });
+
+  router.post('/auth/logout', auth, async (req, res, next) => {
+    try {
+      await services.authService.logout(req.context);
+      res.json({ success: true });
     } catch (err) { next(err); }
   });
 
@@ -65,6 +80,13 @@ function buildRouter(container, authenticate) {
     } catch (err) { next(err); }
   });
 
+  router.get('/orders/:id', auth, async (req, res, next) => {
+    try {
+      const result = await services.orderService.getOrder(req.params.id, req.context);
+      res.json(result);
+    } catch (err) { next(err); }
+  });
+
   // -------------------------------------------------------------------------
   // Billing — Payments
   // -------------------------------------------------------------------------
@@ -72,6 +94,13 @@ function buildRouter(container, authenticate) {
     try {
       const result = await services.billingService.postPayment(req.params.id, req.body, req.context);
       res.status(201).json(result);
+    } catch (err) { next(err); }
+  });
+
+  router.get('/billing/invoices/:id', auth, async (req, res, next) => {
+    try {
+      const result = await services.billingService.getInvoice(req.params.id, req.context);
+      res.json(result);
     } catch (err) { next(err); }
   });
 
@@ -130,6 +159,13 @@ function buildRouter(container, authenticate) {
     } catch (err) { next(err); }
   });
 
+  router.get('/lab/results/:id', auth, async (req, res, next) => {
+    try {
+      const result = await services.labService.getResult(req.params.id, req.context);
+      res.json(result);
+    } catch (err) { next(err); }
+  });
+
   // -------------------------------------------------------------------------
   // Audit
   // -------------------------------------------------------------------------
@@ -137,6 +173,15 @@ function buildRouter(container, authenticate) {
     try {
       const logs = await services.auditService.list(req.context);
       res.json({ data: logs });
+    } catch (err) { next(err); }
+  });
+
+  router.get('/admin/users', auth, async (req, res, next) => {
+    try {
+      if (!req.context.can(PERMISSIONS.ADMIN_ROLE_CHANGE)) {
+        throw new AppError(ERROR_CODES.PERMISSION_DENIED, 'admin.role.change permission required');
+      }
+      res.json({ data: [] });
     } catch (err) { next(err); }
   });
 

@@ -28,6 +28,16 @@ class InMemoryCashierSessionRepository extends InMemoryStore {
       r => r.tenantId === context.tenantId && r.branchId === branchId
     );
   }
+
+  async findByIdOrNumber(value, context, tx) {
+    const byId = this._get(value);
+    if (byId) {
+      return byId.tenantId === context.tenantId ? byId : null;
+    }
+    const byNumber = this._all().find(r => r.number === value);
+    if (!byNumber) return null;
+    return byNumber.tenantId === context.tenantId ? byNumber : null;
+  }
 }
 
 module.exports = { InMemoryCashierSessionRepository };

@@ -1,11 +1,19 @@
 'use strict';
 
 const { InMemoryStore } = require('./InMemoryStore');
+const { AppError, ERROR_CODES } = require('../../core/AppError');
 
 class InMemoryOrderRepository extends InMemoryStore {
   async findById(id, context, tx) {
     const record = this._get(id);
-    if (!record || record.tenantId !== context.tenantId) return null;
+    if (!record) return null;
+    if (record.tenantId !== context.tenantId) {
+      throw new AppError(ERROR_CODES.PERMISSION_DENIED, 'Cross-tenant order access denied', {
+        crossTenant: true,
+        entityType: 'order',
+        entityId: id,
+      });
+    }
     return record;
   }
 

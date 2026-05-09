@@ -2,7 +2,7 @@
 
 const express = require('express');
 const { buildRouter } = require('./router');
-const { attachRequestId, authenticate, errorHandler } = require('./middleware');
+const { attachRequestId, authenticate, buildLoginRateLimiter, errorHandler } = require('./middleware');
 
 /**
  * buildApp — constructs the Express application.
@@ -16,8 +16,9 @@ function buildApp(container) {
 
   app.use(express.json());
   app.use(attachRequestId);
+  app.locals.services = container.services;
 
-  const router = buildRouter(container, authenticate);
+  const router = buildRouter(container, authenticate, buildLoginRateLimiter);
   app.use('/', router);
 
   app.use(errorHandler);

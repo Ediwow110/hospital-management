@@ -69,6 +69,7 @@ class LabService {
 
   async encodeResult(id, data, context) {
     if (!context.can(PERMISSIONS.LAB_RESULT_ENCODE)) {
+      await this._audit.recordSecurityEvent(context, 'lab_result.encode.denied', { id });
       throw new AppError(ERROR_CODES.PERMISSION_DENIED, `${PERMISSIONS.LAB_RESULT_ENCODE} required`);
     }
     const result = await this._getResult(id, context);
@@ -105,6 +106,7 @@ class LabService {
    */
   async requestAmendment(id, data, context) {
     if (!context.can(PERMISSIONS.LAB_RESULT_AMEND_REQUEST)) {
+      await this._audit.recordSecurityEvent(context, 'lab_result.amendment.denied', { id });
       throw new AppError(ERROR_CODES.PERMISSION_DENIED, `${PERMISSIONS.LAB_RESULT_AMEND_REQUEST} required`);
     }
 
@@ -151,6 +153,18 @@ class LabService {
     await this._audit.record(context, 'lab_result.amendment_requested', 'LabResult', id, { reason: data.reason });
 
     return final;
+  }
+
+  async getResult(id, context) {
+    const hasAccess = context.can(PERMISSIONS.LAB_RESULT_ENCODE) ||
+      context.can(PERMISSIONS.LAB_RESULT_VALIDATE) ||
+      context.can(PERMISSIONS.LAB_RESULT_APPROVE) ||
+      context.can(PERMISSIONS.LAB_RESULT_RELEASE);
+    if (!hasAccess) {
+      await this._audit.recordSecurityEvent(context, 'lab_result.view.denied', { id });
+      throw new AppError(ERROR_CODES.PERMISSION_DENIED, 'lab result permission required');
+    }
+    return this._getResult(id, context);
   }
 }
 

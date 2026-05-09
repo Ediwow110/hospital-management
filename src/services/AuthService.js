@@ -1,9 +1,12 @@
 'use strict';
 
 const { randomUUID } = require('crypto');
+const jwt = require('jsonwebtoken');
 const { AppError, ERROR_CODES } = require('../core/AppError');
 const { ROLE_PERMISSIONS } = require('../core/permissions');
 const { AppContext } = require('../core/AppContext');
+const { verifyPassword } = require('../auth/hash');
+const { SECURITY_EVENT_TYPES } = require('./SecurityAuditService');
 
 /**
  * AuthService — demo login only.
@@ -16,9 +19,13 @@ class AuthService {
   /**
    * @param {{ userRepo: object, auditService: object }} deps
    */
-  constructor({ userRepo, auditService }) {
+  constructor({ userRepo, auditService, securityAuditService, invalidatedTokenRepo }) {
     this._userRepo = userRepo;
     this._audit = auditService;
+    this._securityAudit = securityAuditService;
+    this._invalidatedTokens = invalidatedTokenRepo;
+    this._jwtSecret = process.env.JWT_SECRET || 'test-jwt-secret-test-jwt-secret-1234';
+    this._jwtExpiry = process.env.JWT_EXPIRES_IN || '1h';
   }
 
   /**
@@ -53,29 +60,35 @@ class AuthService {
 
     const user = await this._userRepo.findByEmail(email, demoCtx);
 
-    if (!user || user.passwordHash !== password) {
+    if (!user || !(await verifyPassword(password, user.passwordHash))) {
       // Security event: persisted outside any business tx
-      await this._audit.recordSecurityEvent(
-        { tenantId, userId: email, ipAddress, deviceInfo },
-        'auth.login.failed',
-        { email, reason: 'invalid_credentials' }
-      );
+      await this._securityAudit.log(SECURITY_EVENT_TYPES.LOGIN_FAILURE, {
+        tenantId,
+        userId: email,
+        ipAddress,
+        metadata: { email, reason: 'invalid_credentials' },
+      });
       throw new AppError(ERROR_CODES.PERMISSION_DENIED, 'Invalid credentials');
     }
 
     if (user.status !== 'active') {
-      await this._audit.recordSecurityEvent(
-        { tenantId, userId: user.id, ipAddress, deviceInfo },
-        'auth.login.failed',
-        { email, reason: 'account_inactive' }
-      );
+      await this._securityAudit.log(SECURITY_EVENT_TYPES.LOGIN_FAILURE, {
+        tenantId,
+        userId: user.id,
+        ipAddress,
+        metadata: { email, reason: 'account_inactive' },
+      });
       throw new AppError(ERROR_CODES.PERMISSION_DENIED, 'Account is not active');
     }
 
-    // Demo token: base64(userId:tenantId:timestamp) — NOT secure, PR #4 replaces
-    const token = Buffer.from(
-      JSON.stringify({ userId: user.id, tenantId, roles: user.roles, iat: Date.now() })
-    ).toString('base64');
+    const jti = randomUUID();
+    const token = jwt.sign({
+      userId: user.id,
+      tenantId,
+      branchId: user.branchId || 'default',
+      roles: user.roles || [],
+      jti,
+    }, this._jwtSecret, { expiresIn: this._jwtExpiry });
 
     await this._audit.record(
       new AppContext({
@@ -91,6 +104,13 @@ class AuthService {
       user.id,
       { email }
     );
+
+    await this._securityAudit.log(SECURITY_EVENT_TYPES.LOGIN_SUCCESS, {
+      tenantId,
+      userId: user.id,
+      ipAddress,
+      metadata: { email, branchId: user.branchId || 'default' },
+    });
 
     return {
       token,
@@ -114,9 +134,15 @@ class AuthService {
    * @param {string} [deviceInfo]
    * @returns {AppContext}
    */
-  decodeToken(token, requestId, ipAddress, deviceInfo = '') {
+  async decodeToken(token, requestId, ipAddress, deviceInfo = '') {
     try {
-      const payload = JSON.parse(Buffer.from(token, 'base64').toString('utf8'));
+      const payload = jwt.verify(token, this._jwtSecret);
+      if (!payload.userId || !payload.tenantId || !payload.branchId || !Array.isArray(payload.roles) || !payload.jti || !payload.iat || !payload.exp) {
+        throw new Error('Invalid token payload');
+      }
+      if (this._invalidatedTokens && await this._invalidatedTokens.isInvalidated(payload.jti)) {
+        throw new Error('Token revoked');
+      }
       const permissions = (payload.roles || []).flatMap(r => ROLE_PERMISSIONS[r] || []);
       return new AppContext({
         requestId,
@@ -127,10 +153,29 @@ class AuthService {
         permissions,
         ipAddress,
         deviceInfo,
+        tokenJti: payload.jti,
       });
     } catch {
       throw new AppError(ERROR_CODES.PERMISSION_DENIED, 'Invalid or expired token');
     }
+  }
+
+  async logout(context) {
+    if (!context.tokenJti) {
+      throw new AppError(ERROR_CODES.PERMISSION_DENIED, 'Missing token identifier');
+    }
+    await this._invalidatedTokens.invalidate({
+      jti: context.tokenJti,
+      tenantId: context.tenantId,
+      userId: context.userId,
+      invalidatedAt: new Date().toISOString(),
+    });
+    await this._securityAudit.log(SECURITY_EVENT_TYPES.TOKEN_REVOKED, {
+      tenantId: context.tenantId,
+      userId: context.userId,
+      ipAddress: context.ipAddress,
+      metadata: { jti: context.tokenJti },
+    });
   }
 }
 

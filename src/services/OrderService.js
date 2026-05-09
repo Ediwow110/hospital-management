@@ -68,6 +68,18 @@ class OrderService {
 
     return { order: savedOrder, invoice: savedInvoice };
   }
+
+  async getOrder(id, context) {
+    if (!context.can(PERMISSIONS.ORDER_CREATE)) {
+      await this._audit.recordSecurityEvent(context, 'order.view.denied', { id });
+      throw new AppError(ERROR_CODES.PERMISSION_DENIED, 'order.create permission required');
+    }
+    const order = await this._orders.findById(id, context);
+    if (!order) {
+      throw new AppError(ERROR_CODES.NOT_FOUND, `Order ${id} not found`);
+    }
+    return order;
+  }
 }
 
 module.exports = { OrderService };

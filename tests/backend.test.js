@@ -18,7 +18,7 @@ const { randomUUID } = require('crypto');
 const bcrypt = require('bcryptjs');
 
 // Test password and its bcrypt hash for auth fixtures
-const TEST_PASSWORD = 'password123';
+const TEST_PASSWORD = TEST_PASSWORD;
 const { AppContext } = require('../src/core/AppContext');
 const { AppError, ERROR_CODES } = require('../src/core/AppError');
 const { PERMISSIONS, ROLE_PERMISSIONS } = require('../src/core/permissions');
@@ -139,7 +139,7 @@ userRepo._set(TEST_USER_ID, {
   await test('login with valid credentials returns token and user', async () => {
     const result = await authService.login(
       'admin@test.com',
-      'TEST_PASSWORD',
+      TEST_PASSWORD,
       TENANT_ID,
       '127.0.0.1',
       'test-runner'
@@ -160,9 +160,9 @@ userRepo._set(TEST_USER_ID, {
     assert.ok(threw, 'Expected error to be thrown');
   });
 
-  await test('decodeToken returns valid AppContext', async () => {
-    const { token } = await authService.login('admin@test.com', 'password123', TENANT_ID, '127.0.0.1');
-    const ctx = authService.decodeToken(token, randomUUID(), '127.0.0.1');
+  await test('verifyToken returns valid AppContext', async () => {
+    const { token } = await authService.login('admin@test.com', TEST_PASSWORD, TENANT_ID, '127.0.0.1');
+    const ctx = authService.verifyToken(token, randomUUID(), '127.0.0.1');
     assert.ok(ctx instanceof AppContext);
     assert.strictEqual(ctx.tenantId, TENANT_ID);
   });

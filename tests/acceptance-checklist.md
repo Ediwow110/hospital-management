@@ -18,7 +18,7 @@ Use this checklist for UAT and regression testing against the blueprint.
 - [ ] Patient identity header is visible on patient-related workflow screens.
 - [ ] Result approval screen shows payment, specimen, encoding, dual-approval, and locking checks.
 - [ ] Authorized approver validates and approves the result.
-- [ ] Result print preview shows lab number and QR verification placeholder.
+- [ ] Result print preview shows lab number and QR verification block.
 - [ ] Sales report updates are visible.
 - [ ] Audit log records each sensitive action.
 

@@ -405,7 +405,7 @@ VALUES
 ON CONFLICT (template_code) DO NOTHING;
 
 INSERT INTO template_versions (print_template_id, version, content, created_by)
-SELECT pt.id, 1, 'Versioned production template placeholder for ' || pt.name, u.id
+SELECT pt.id, 1, 'Versioned production template body for ' || pt.name, u.id
 FROM print_templates pt
 LEFT JOIN users u ON u.email = 'admin@hospital.local'
 ON CONFLICT (print_template_id, version) DO NOTHING;

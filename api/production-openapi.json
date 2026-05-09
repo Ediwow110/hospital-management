@@ -8,7 +8,7 @@
   "servers": [
     {
       "url": "https://api.example-hms.local/v1",
-      "description": "Production base URL placeholder"
+      "description": "Production base URL configured per deployment"
     }
   ],
   "security": [

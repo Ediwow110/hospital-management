@@ -12,20 +12,44 @@
  * PR #4 — PostgreSQL Persistence Foundation.
  */
 
-const { PgUserRepository } = require('./pg/PgUserRepository');
 const { PgAuditLogRepository } = require('./pg/PgAuditLogRepository');
 const { PgLabResultRepository } = require('./pg/PgLabResultRepository');
 const { assertRepositoryInterfaces } = require('./interfaces');
 
 function createPgRepositories(pool) {
-  const userRepo = new PgUserRepository({ pool });
   const auditRepo = new PgAuditLogRepository({ pool });
   const labRepo = new PgLabResultRepository({ pool });
 
   const repositories = {
     users: {
-      findActiveByEmail: (email) => userRepo.findByEmail(email, { _tx: pool }),
-      findActiveById: (id) => userRepo.findById(id, { _tx: pool })
+      /**
+       * Find an active user by email across all tenants.
+       * The auth service narrows to the correct tenant via tenantId login param.
+       */
+      findActiveByEmail: async (email) => {
+        const { rows } = await pool.query(
+          `SELECT id, tenant_id AS "tenantId", branch_id AS "branchId",
+                  email, password_hash AS "passwordHash", name,
+                  roles, status
+           FROM users
+           WHERE email = $1 AND status = 'active'
+           LIMIT 1`,
+          [email]
+        );
+        return rows[0] || null;
+      },
+      findActiveById: async (id) => {
+        const { rows } = await pool.query(
+          `SELECT id, tenant_id AS "tenantId", branch_id AS "branchId",
+                  email, password_hash AS "passwordHash", name,
+                  roles, status
+           FROM users
+           WHERE id = $1 AND status = 'active'
+           LIMIT 1`,
+          [id]
+        );
+        return rows[0] || null;
+      }
     },
     roles: {
       listRolePermissions: async (role) => {
@@ -183,7 +207,7 @@ function createPgRepositories(pool) {
         );
         return rows[0];
       },
-      createResult: (labResult) => labRepo.create(labResult, { _tx: pool }),
+      createResult: (labResult, context) => labRepo.create(labResult, context || { _tx: pool }),
       findOrderByIdOrNumber: async (id) => {
         const { rows } = await pool.query(
           'SELECT * FROM lab_orders WHERE id = $1 OR lab_no = $1 LIMIT 1',
@@ -214,8 +238,8 @@ function createPgRepositories(pool) {
       }
     },
     audit: {
-      create: (event) => auditRepo.create(event, { _tx: pool }),
-      searchByTenant: (tenantId) => auditRepo.searchByTenant(tenantId, { _tx: pool })
+      create: (event, context) => auditRepo.create(event, context || { _tx: pool }),
+      searchByTenant: (tenantId, context) => auditRepo.searchByTenant(tenantId, context || { _tx: pool })
     },
     approvals: {
       create: async (approval) => {

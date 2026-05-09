@@ -45,7 +45,12 @@ const { LabService } = require('../src/services/LabService');
 const TENANT_ID = 'tenant-test';
 const BRANCH_ID = 'branch-main';
 
-function makeCtx({ userId = 'user-1', roles = ['admin'] } = {}) {
+/**
+ * Build an AppContext for a given userId and role.
+ * Use 'superadmin' to get all permissions.
+ * Use empty array for no permissions.
+ */
+function makeCtx({ userId = 'user-1', roles = ['superadmin'] } = {}) {
   const permissions = roles.flatMap(r => ROLE_PERMISSIONS[r] || []);
   return new AppContext({
     requestId: randomUUID(),
@@ -105,7 +110,7 @@ userRepo._set(TEST_USER_ID, {
   email: 'admin@test.com',
   passwordHash: 'password123',
   name: 'Test Admin',
-  roles: ['admin'],
+  roles: ['superadmin'],
   status: 'active',
 });
 
@@ -160,7 +165,7 @@ userRepo._set(TEST_USER_ID, {
 
   // -- Patient Registration --
   console.log('\nPatient Registration');
-  const adminCtx = makeCtx({ userId: TEST_USER_ID, roles: ['admin'] });
+  const adminCtx = makeCtx({ userId: TEST_USER_ID, roles: ['superadmin'] });
 
   let patient;
   await test('register patient succeeds with required fields', async () => {
@@ -207,6 +212,7 @@ userRepo._set(TEST_USER_ID, {
   let order;
   let invoice;
   await test('createOrder returns order and invoice', async () => {
+    assert.ok(patient, 'Prerequisite: patient must exist');
     const result = await orderService.createOrder({
       patientId: patient.id,
       items: [
@@ -227,7 +233,10 @@ userRepo._set(TEST_USER_ID, {
     const noPermCtx = makeCtx({ userId: 'nobody', roles: [] });
     let threw = false;
     try {
-      await orderService.createOrder({ patientId: patient.id, items: [{ description: 'X', qty: 1, unitPrice: 10 }] }, noPermCtx);
+      await orderService.createOrder(
+        { patientId: 'pid', items: [{ description: 'X', qty: 1, unitPrice: 10 }] },
+        noPermCtx
+      );
     } catch (err) {
       threw = true;
       assert.strictEqual(err.code, ERROR_CODES.PERMISSION_DENIED);
@@ -239,13 +248,12 @@ userRepo._set(TEST_USER_ID, {
   console.log('\nCashier Session');
 
   const cashierUserId = 'cashier-1';
-  const cashierCtx = makeCtx({ userId: cashierUserId, roles: ['cashier'] });
-  // Give cashier BILLING_PAYMENT_CREATE permission via admin ctx for simplicity
-  const cashierAdminCtx = makeCtx({ userId: cashierUserId, roles: ['admin'] });
+  // superadmin has BILLING_PAYMENT_CREATE
+  const cashierCtx = makeCtx({ userId: cashierUserId, roles: ['superadmin'] });
 
   let session;
   await test('open cashier session succeeds', async () => {
-    session = await billingService.openSession({ startingCash: 5000 }, cashierAdminCtx);
+    session = await billingService.openSession({ startingCash: 5000 }, cashierCtx);
     assert.ok(session.id);
     assert.strictEqual(session.status, 'Open');
     assert.strictEqual(session.userId, cashierUserId);
@@ -254,7 +262,7 @@ userRepo._set(TEST_USER_ID, {
   await test('open second session for same user throws DUPLICATE_RECORD', async () => {
     let threw = false;
     try {
-      await billingService.openSession({ startingCash: 1000 }, cashierAdminCtx);
+      await billingService.openSession({ startingCash: 1000 }, cashierCtx);
     } catch (err) {
       threw = true;
       assert.strictEqual(err.code, ERROR_CODES.DUPLICATE_RECORD);
@@ -266,30 +274,38 @@ userRepo._set(TEST_USER_ID, {
   console.log('\nPayment Posting');
 
   await test('postPayment reduces invoice balance', async () => {
-    const updated = await billingService.postPayment(invoice.id, {
+    assert.ok(invoice, 'Prerequisite: invoice must exist');
+    assert.ok(session, 'Prerequisite: session must exist');
+    const result = await billingService.postPayment(invoice.id, {
       amount: 500,
       method: 'cash',
       cashierSessionId: session.id,
     }, adminCtx);
-    assert.ok(updated.invoice);
-    assert.strictEqual(updated.invoice.balance, 400);
-    assert.strictEqual(updated.invoice.status, 'PartiallyPaid');
+    assert.ok(result.invoice);
+    assert.strictEqual(result.invoice.balance, 400);
+    assert.strictEqual(result.invoice.status, 'PartiallyPaid');
   });
 
   await test('postPayment pays invoice in full', async () => {
-    const updated = await billingService.postPayment(invoice.id, {
+    assert.ok(invoice, 'Prerequisite: invoice must exist');
+    const result = await billingService.postPayment(invoice.id, {
       amount: 400,
       method: 'cash',
       cashierSessionId: session.id,
     }, adminCtx);
-    assert.strictEqual(updated.invoice.status, 'Paid');
-    assert.strictEqual(updated.invoice.balance, 0);
+    assert.strictEqual(result.invoice.status, 'Paid');
+    assert.strictEqual(result.invoice.balance, 0);
   });
 
   await test('postPayment on Paid invoice throws error', async () => {
+    assert.ok(invoice, 'Prerequisite: invoice must exist');
     let threw = false;
     try {
-      await billingService.postPayment(invoice.id, { amount: 1, method: 'cash', cashierSessionId: session.id }, adminCtx);
+      await billingService.postPayment(
+        invoice.id,
+        { amount: 1, method: 'cash', cashierSessionId: session.id },
+        adminCtx
+      );
     } catch (err) {
       threw = true;
       assert.ok(err instanceof AppError);
@@ -301,7 +317,9 @@ userRepo._set(TEST_USER_ID, {
   console.log('\nCashier Session Close');
 
   await test('non-owner cannot close cashier session', async () => {
-    const otherCtx = makeCtx({ userId: 'other-user', roles: ['admin'] });
+    assert.ok(session, 'Prerequisite: session must exist');
+    // Use a non-owner ctx with receptionist role (not branch_manager or superadmin)
+    const otherCtx = makeCtx({ userId: 'other-user', roles: ['receptionist'] });
     let threw = false;
     try {
       await billingService.closeSession(session.id, { closingCash: 5500 }, otherCtx);
@@ -314,7 +332,8 @@ userRepo._set(TEST_USER_ID, {
   });
 
   await test('owner can close own cashier session', async () => {
-    const closed = await billingService.closeSession(session.id, { closingCash: 5500 }, cashierAdminCtx);
+    assert.ok(session, 'Prerequisite: session must exist');
+    const closed = await billingService.closeSession(session.id, { closingCash: 5500 }, cashierCtx);
     assert.strictEqual(closed.status, 'Closed');
     assert.ok(closed.closedAt);
   });
@@ -324,6 +343,7 @@ userRepo._set(TEST_USER_ID, {
 
   let labResult;
   await test('createResult creates lab result in Pending Collection', async () => {
+    assert.ok(order, 'Prerequisite: order must exist');
     labResult = await labService.createResult({
       orderId: order.id,
       patientId: patient.id,
@@ -334,11 +354,13 @@ userRepo._set(TEST_USER_ID, {
   });
 
   await test('collectSpecimen transitions to Collected', async () => {
+    assert.ok(labResult, 'Prerequisite: lab result must exist');
     labResult = await labService.collectSpecimen(labResult.id, adminCtx);
     assert.strictEqual(labResult.status, 'Collected');
   });
 
   await test('encodeResult transitions to Encoded', async () => {
+    assert.ok(labResult, 'Prerequisite: lab result must exist');
     labResult = await labService.encodeResult(labResult.id, {
       resultData: { wbc: 5.2, rbc: 4.8, hgb: 13.5 },
     }, adminCtx);
@@ -347,16 +369,19 @@ userRepo._set(TEST_USER_ID, {
   });
 
   await test('validateResult transitions to Validated', async () => {
+    assert.ok(labResult, 'Prerequisite: lab result must exist');
     labResult = await labService.validateResult(labResult.id, adminCtx);
     assert.strictEqual(labResult.status, 'Validated');
   });
 
   await test('approveResult transitions to Approved', async () => {
+    assert.ok(labResult, 'Prerequisite: lab result must exist');
     labResult = await labService.approveResult(labResult.id, adminCtx);
     assert.strictEqual(labResult.status, 'Approved');
   });
 
   await test('releaseResult transitions to Released', async () => {
+    assert.ok(labResult, 'Prerequisite: lab result must exist');
     labResult = await labService.releaseResult(labResult.id, adminCtx);
     assert.strictEqual(labResult.status, 'Released');
   });
@@ -368,7 +393,7 @@ userRepo._set(TEST_USER_ID, {
     } catch (err) {
       threw = true;
       assert.ok(err instanceof AppError);
-      assert.strictEqual(err.code, ERROR_CODES.WORKFLOW_VIOLATION);
+      assert.strictEqual(err.code, ERROR_CODES.INVALID_WORKFLOW_TRANSITION);
     }
     assert.ok(threw);
   });

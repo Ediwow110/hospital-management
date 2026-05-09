@@ -10,7 +10,7 @@
     "start:api": "node src/api/server.js",
     "migrate": "node src/infrastructure/migrate.js",
     "check": "node --check src/core/app-context.js && node --check src/core/app-error.js && node --check src/core/permissions.js && node --check src/core/production-rules.js && node --check src/core/validation.js && node --check src/repositories/pg/PgUserRepository.js && node --check src/repositories/pg/PgAuditLogRepository.js && node --check src/repositories/pg/PgLabResultRepository.js && node --check src/infrastructure/db-pool.js && node --check src/infrastructure/transaction.js && node --check src/services/hms-service.js && node --check tests/integration.test.js",
-    "test": "node tests/backend.test.js",
+    "test": "node tests/production-rules.test.js",
     "test:integration": "node tests/integration.test.js"
   }
 }

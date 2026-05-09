@@ -18,8 +18,8 @@ const { randomUUID } = require('crypto');
 const bcrypt = require('bcryptjs');
 
 // Test password and its bcrypt hash for auth fixtures
-const TEST_PASSWORD = TEST_PASSWORD;
-const { AppContext } = require('../src/core/AppContext');
+const TEST_PASSWORD = 'password123';const { AppContext } = require('../src/core/AppContext');
+
 const { AppError, ERROR_CODES } = require('../src/core/AppError');
 const { PERMISSIONS, ROLE_PERMISSIONS } = require('../src/core/permissions');
 const { assertLabTransition } = require('../src/core/workflow');

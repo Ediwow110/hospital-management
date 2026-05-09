@@ -106,9 +106,7 @@ const labService = new LabService({ labResultRepo, auditService });
 
 // Seed a test user (passwordHash = plaintext for demo per AuthService docs)
 const TEST_USER_ID = randomUUID();
-  // Generate bcrypt hash for test password
-  const testPasswordHash = await bcrypt.hash(TEST_PASSWORD, 10);
-
+  const testPasswordHash = bcrypt.hashSync(TEST_PASSWORD, 10);
 userRepo._set(TEST_USER_ID, {
   id: TEST_USER_ID,
   tenantId: TENANT_ID,

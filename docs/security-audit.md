@@ -135,6 +135,16 @@ Run `npm test` to check the implemented rule helpers and static action wiring. B
 
 ### Known Production Gaps (Required Before Production)
 
+**Server-side token revocation (P0)**: JWT authentication is implemented with signature and expiry verification. Logout creates audit records but does not revoke tokens server-side. Logged-out or compromised JWT tokens remain valid until JWT expiry (8h). Required before production:
+
+- Add `jti` (JWT ID) to token payload
+- Create `token_revocations` or `sessions` table with migration
+- `AuthService.logout()` records revoked `jti` with `revoked_at` timestamp
+- `AuthService.verifyToken()` or auth middleware checks revocation before accepting token
+- Tests prove revoked token is rejected
+- Tests prove expired token is rejected
+- Consider: session table approach for user/tenant deactivation enforcement
+
 - **PostgreSQL repository implementations**: All repositories are in-memory only. Full PostgreSQL implementations with the same tenant-scoped guarantees are deferred to PR #4.
 
 - **PostgreSQL integration tests**: Concurrency tests for payment double-submit, cashier concurrent close, and lab result trigger immutability require a real PostgreSQL instance. Deferred to PR #4.

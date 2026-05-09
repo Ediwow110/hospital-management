@@ -13,12 +13,14 @@ This implementation converts the blueprint into a static, testable HMS prototype
 - Controlled demo flow for registration -> order -> billing/payment -> queue -> specimen custody -> result encoding/validation/approval/release -> QR/print preview -> reports/audit
 - Client-side permission, workflow, approval, notification, audit, payment, and inventory guardrails for prototype validation
 - Service-layer style production rule module in `src/core/production-rules.js` for tenant isolation, approval, workflow, payment, notification, and audit checks
+- Dependency-free Node API foundation with route adapter, in-memory development store, and service-layer HMS workflows in `src/api`, `src/infrastructure`, and `src/services`
 - Machine-readable production API contract in `api/production-openapi.json`
 - Machine-readable permission matrix in `docs/permission-matrix.json`
 - Deployment and rollback runbook in `docs/deployment-runbook.md`
 - PostgreSQL schema for the first required tables, next-priority operational tables, and expanded blueprint domains
 - Seed data for roles, granular permissions, demo users, services, packages, inventory, providers, report catalog, templates, and numbering sequences
 - Node-based regression tests for critical business rules and unwired static actions
+- GitHub Actions workflow that runs syntax checks and production tests on PRs and pushes
 
 ## First Screens Covered
 
@@ -51,7 +53,17 @@ The static app also includes reports, audit log, approval center, inventory basi
 │   ├── schema.sql
 │   └── seed.sql
 ├── src/
-│   └── core/production-rules.js
+│   ├── api/
+│   │   ├── router.js
+│   │   └── server.js
+│   ├── core/
+│   │   ├── app-error.js
+│   │   ├── production-rules.js
+│   │   └── validation.js
+│   ├── infrastructure/
+│   │   └── in-memory-store.js
+│   └── services/
+│       └── hms-service.js
 ├── docs/
 │   ├── blueprint-implementation.md
 │   ├── deployment-runbook.md
@@ -87,6 +99,16 @@ Then select **Run CBC demo** or manually follow this flow:
 10. View reports
 11. View audit log
 
+## Running The API Foundation
+
+Start the dependency-free Node API adapter with:
+
+```bash
+npm run start:api
+```
+
+The API uses the in-memory development store from `src/infrastructure/in-memory-store.js`. Production database persistence should implement the same service contracts with transactional PostgreSQL repositories.
+
 ## Tests
 
 Run the rule and wiring checks with:
@@ -95,7 +117,13 @@ Run the rule and wiring checks with:
 npm test
 ```
 
-The tests cover numbering formats, permission denials, maker-checker approval rules, tenant/branch isolation, controlled laboratory transitions, overpayment and duplicate submission blocking, status class mapping, inventory status rules, notification privacy, feature flags, static `data-action` button wiring, API group coverage, dangerous API controls, required schema tables, permission matrix coverage, and deployment runbook sections.
+Run syntax checks with:
+
+```bash
+npm run check
+```
+
+The tests cover numbering formats, permission denials, maker-checker approval rules, tenant/branch isolation, controlled laboratory transitions, overpayment and duplicate submission blocking, status class mapping, inventory status rules, notification privacy, feature flags, static `data-action` button wiring, API group coverage, dangerous API controls, required schema tables, permission matrix coverage, deployment runbook sections, and API happy/failure workflows.
 
 ## Database
 

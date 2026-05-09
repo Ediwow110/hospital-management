@@ -134,6 +134,18 @@
         "responses": { "202": { "$ref": "#/components/responses/ApprovalResponse" } }
       }
     },
+    "/approval-requests": {
+      "post": {
+        "tags": ["admin"],
+        "summary": "Create generic maker-checker approval request",
+        "x-permission": "approval.request",
+        "x-dangerous-action": true,
+        "x-controls": ["reason", "approval", "audit"],
+        "parameters": [{ "$ref": "#/components/parameters/IdempotencyKey" }],
+        "requestBody": { "$ref": "#/components/requestBodies/ApprovalCreateRequest" },
+        "responses": { "202": { "$ref": "#/components/responses/ApprovalResponse" } }
+      }
+    },
     "/appointments": {
       "post": {
         "tags": ["appointments"],
@@ -223,6 +235,26 @@
         "responses": { "200": { "$ref": "#/components/responses/RecordResponse" } }
       }
     },
+    "/lab/orders/{id}/receive": {
+      "post": {
+        "tags": ["lab"],
+        "summary": "Receive specimen",
+        "x-permission": "lab.result.encode",
+        "x-controls": ["status_engine", "chain_of_custody", "audit"],
+        "parameters": [{ "$ref": "#/components/parameters/Id" }, { "$ref": "#/components/parameters/IdempotencyKey" }],
+        "responses": { "200": { "$ref": "#/components/responses/RecordResponse" } }
+      }
+    },
+    "/lab/orders/{id}/process": {
+      "post": {
+        "tags": ["lab"],
+        "summary": "Move specimen to processing",
+        "x-permission": "lab.result.encode",
+        "x-controls": ["status_engine", "chain_of_custody", "audit"],
+        "parameters": [{ "$ref": "#/components/parameters/Id" }, { "$ref": "#/components/parameters/IdempotencyKey" }],
+        "responses": { "200": { "$ref": "#/components/responses/RecordResponse" } }
+      }
+    },
     "/lab/results/{id}/encode": {
       "post": {
         "tags": ["lab"],
@@ -241,6 +273,16 @@
         "x-permission": "lab.result.approve",
         "x-dangerous-action": true,
         "x-controls": ["dual_approval", "status_engine", "audit"],
+        "parameters": [{ "$ref": "#/components/parameters/Id" }, { "$ref": "#/components/parameters/IdempotencyKey" }],
+        "responses": { "200": { "$ref": "#/components/responses/RecordResponse" } }
+      }
+    },
+    "/lab/results/{id}/validate": {
+      "post": {
+        "tags": ["lab"],
+        "summary": "Validate encoded lab result",
+        "x-permission": "lab.result.validate",
+        "x-controls": ["status_engine", "audit"],
         "parameters": [{ "$ref": "#/components/parameters/Id" }, { "$ref": "#/components/parameters/IdempotencyKey" }],
         "responses": { "200": { "$ref": "#/components/responses/RecordResponse" } }
       }
@@ -393,6 +435,7 @@
       "ReportExportRequest": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ReportExportRequest" } } } },
       "NotificationRequest": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/NotificationRequest" } } } },
       "RolePermissionRequest": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/RolePermissionRequest" } } } },
+      "ApprovalCreateRequest": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ApprovalCreateRequest" } } } },
       "ReasonRequest": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ReasonRequest" } } } }
     },
     "responses": {
@@ -420,6 +463,7 @@
       "ReportExportRequest": { "type": "object", "required": ["format", "filters"], "properties": { "format": { "type": "string", "enum": ["xlsx", "csv", "pdf"] }, "filters": { "type": "object" }, "reason": { "type": "string" } } },
       "NotificationRequest": { "type": "object", "required": ["recipientType", "recipientId", "templateCode"], "properties": { "recipientType": { "type": "string" }, "recipientId": { "type": "string" }, "templateCode": { "type": "string" }, "channel": { "type": "string", "enum": ["in_app", "email", "sms"] } } },
       "RolePermissionRequest": { "type": "object", "required": ["permissionCodes", "reason"], "properties": { "permissionCodes": { "type": "array", "items": { "type": "string" } }, "reason": { "type": "string", "minLength": 5 } } },
+      "ApprovalCreateRequest": { "type": "object", "required": ["type", "module", "recordType", "recordId", "reason"], "properties": { "type": { "type": "string" }, "module": { "type": "string" }, "recordType": { "type": "string" }, "recordId": { "type": "string" }, "reason": { "type": "string", "minLength": 5 } } },
       "ReasonRequest": { "type": "object", "required": ["reason"], "properties": { "reason": { "type": "string", "minLength": 5 }, "keyword": { "type": "string" } } },
       "AuthSession": { "type": "object", "required": ["accessToken", "user"], "properties": { "accessToken": { "type": "string" }, "user": { "type": "object" } } },
       "RecordResponse": { "type": "object", "required": ["data"], "properties": { "data": { "type": "object" } } },

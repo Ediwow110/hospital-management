@@ -80,6 +80,9 @@ Use this checklist for UAT and regression testing against the blueprint.
 - [ ] Background jobs handle email, SMS, PDF, export, import, and backup work.
 - [ ] Raw database errors are never exposed to users.
 - [ ] Maintenance mode and rollback plan are documented before disruptive deployment.
+- [ ] API router enforces authentication and idempotency for high-risk writes.
+- [ ] Service layer performs permission, tenant, branch, workflow, audit, and notification controls.
+- [ ] API workflow test covers patient -> order -> payment -> queue -> LIS release plus failure paths.
 
 ## UI Wiring Tests
 
@@ -100,3 +103,4 @@ Use this checklist for UAT and regression testing against the blueprint.
 - [ ] `docs/permission-matrix.json` covers critical role/action permissions.
 - [ ] `docs/deployment-runbook.md` includes pre-deployment, smoke test, rollback, and go/no-go gates.
 - [ ] SQL files pass basic quote and parenthesis balance checks.
+- [ ] GitHub Actions CI runs `npm run check` and `npm test`.

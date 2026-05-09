@@ -1,6 +1,8 @@
 const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
+const { createRouter } = require('../src/api/router');
+const { createInMemoryStore } = require('../src/infrastructure/in-memory-store');
 
 const root = path.join(__dirname, '..');
 const schemaSql = fs.readFileSync(path.join(root, 'database/schema.sql'), 'utf8');
@@ -217,11 +219,38 @@ function assertRunbookExists() {
   });
 }
 
+function assertExecutableFoundationExists() {
+  [
+    'src/api/router.js',
+    'src/api/server.js',
+    'src/services/hms-service.js',
+    'src/infrastructure/in-memory-store.js',
+    '.github/workflows/ci.yml'
+  ].forEach(relativePath => {
+    assert.ok(fs.existsSync(path.join(root, relativePath)), `${relativePath} missing`);
+  });
+  const packageJson = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
+  assert.ok(packageJson.scripts['start:api'], 'start:api script missing');
+  assert.ok(packageJson.scripts.check, 'check script missing');
+  assert.ok(packageJson.scripts.test.includes('api-workflow.test.js'), 'API workflow test is not in npm test');
+}
+
+function assertRouterCoveredByOpenApi() {
+  const router = createRouter(createInMemoryStore());
+  const openApiRoutes = new Set(Object.keys(openapi.paths));
+  const missing = router.routes
+    .map(route => route.pattern.replace(/:([A-Za-z0-9_]+)/g, '{$1}'))
+    .filter(pattern => !openApiRoutes.has(pattern));
+  assert.deepStrictEqual(missing, []);
+}
+
 assertTablesExist();
 assertApiGroupsExist();
 assertDangerousApiControls();
 assertComponentsExist();
 assertPermissionMatrixCoverage();
 assertRunbookExists();
+assertExecutableFoundationExists();
+assertRouterCoveredByOpenApi();
 
 console.log('All production coverage checks passed.');

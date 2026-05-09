@@ -11,6 +11,14 @@ Machine-readable handoff files:
 - `docs/deployment-runbook.md`: deployment, rollback, smoke test, and go/no-go runbook.
 - `tests/production-coverage.test.js`: coverage checks that keep API groups, schema tables, dangerous-action controls, permission matrix rows, and runbook sections from drifting silently.
 
+Executable backend foundation:
+
+- `src/api/router.js`: dependency-free route adapter that maps production routes to service methods and enforces authentication plus idempotency headers.
+- `src/api/server.js`: local HTTP server for API smoke testing.
+- `src/services/hms-service.js`: service-layer workflows for patient registration, ordering, billing, LIS, inventory, reports, health, approvals, notification queuing, and audit logging.
+- `src/infrastructure/in-memory-store.js`: development repository adapter. Production should replace this with transactional PostgreSQL repositories while preserving service contracts.
+- `.github/workflows/ci.yml`: syntax and production test checks for pushes and pull requests.
+
 ## Architecture Standard
 
 Controllers must not directly mutate business records. A write request should follow this path:

@@ -5,8 +5,9 @@ on:
   push:
     branches:
       - main
-      - "codex/**"
+      - "codex/**"     
       - pr3-backend-runtime
+      - "pr3/**"
 
 jobs:
   check-and-test:

@@ -4,10 +4,15 @@
   "private": true,
   "description": "PR #4 - PostgreSQL Persistence Foundation. Extends the production-grade backend from PR #3. Not production-ready.",
   "dependencies": {
-    "pg": "^8.11.3"
+    "pg": "^8.11.3",
+    "express": "^4.19.2",
+    "uuid": "^9.0.1"
   },
   "scripts": {
-    "start:api": "node src/api/server.js",
+    "start:api": "node src/api/server.js",,
+    "start": "node src/api/server.js",
+    "dev": "node --watch src/api/server.js",
+    "test:backend": "node tests/backend.test.js"
     "migrate": "node src/infrastructure/migrate.js",
     "check": "node --check src/core/app-context.js && node --check src/core/app-error.js && node --check src/core/permissions.js && node --check src/core/production-rules.js && node --check src/core/validation.js && node --check src/repositories/pg/PgUserRepository.js && node --check src/repositories/pg/PgAuditLogRepository.js && node --check src/repositories/pg/PgLabResultRepository.js && node --check src/infrastructure/db-pool.js && node --check src/infrastructure/transaction.js && node --check src/services/hms-service.js && node --check tests/integration.test.js",
     "test": "node tests/production-rules.test.js",

@@ -1,40 +1,32 @@
-const http = require('http');
-const { createInMemoryStore } = require('../infrastructure/in-memory-store');
-const { createRouter } = require('./router');
+'use strict';
 
-function createServer({ store = createInMemoryStore() } = {}) {
-  const router = createRouter(store);
-  return http.createServer(async (request, response) => {
-    const chunks = [];
-    request.on('data', chunk => chunks.push(chunk));
-    request.on('end', async () => {
-      const rawBody = Buffer.concat(chunks).toString('utf8');
-      const headers = normalizeHeaders(request.headers);
-      const result = await router.handle({
-        method: request.method,
-        path: new URL(request.url, 'http://localhost').pathname,
-        headers,
-        rawBody,
-        ipAddress: request.socket.remoteAddress
-      });
-      response.writeHead(result.status, { 'content-type': 'application/json' });
-      response.end(JSON.stringify(result.body));
-    });
+/**
+ * HMS Backend Entry Point — PR #3
+ *
+ * Starts the Express server with in-memory storage.
+ * PostgreSQL persistence is deferred to PR #4.
+ *
+ * Usage:
+ *   node src/api/server.js
+ *   STORAGE_ADAPTER=memory PORT=3000 node src/api/server.js
+ */
+
+const { buildContainer } = require('../config/container');
+const { buildApp } = require('./app');
+
+const PORT = parseInt(process.env.PORT || '3000', 10);
+
+try {
+  const container = buildContainer();
+  const app = buildApp(container);
+
+  app.listen(PORT, () => {
+    console.log(`[HMS] Server started on port ${PORT}`);
+    console.log(`[HMS] Storage adapter: ${process.env.STORAGE_ADAPTER || 'memory'}`);
+    console.log(`[HMS] Health: http://localhost:${PORT}/health`);
+    console.log('[HMS] NOTE: In-memory storage is demo/test only. PostgreSQL deferred to PR #4.');
   });
+} catch (err) {
+  console.error('[HMS] Failed to start server:', err.message);
+  process.exit(1);
 }
-
-function normalizeHeaders(headers) {
-  return Object.fromEntries(Object.entries(headers).map(([key, value]) => [key.toLowerCase(), Array.isArray(value) ? value[0] : value]));
-}
-
-if (require.main === module) {
-  const port = Number(process.env.PORT || 3000);
-  createServer().listen(port, () => {
-    console.log(`HMS API listening on http://localhost:${port}`);
-  });
-}
-
-module.exports = {
-  createServer,
-  normalizeHeaders
-};

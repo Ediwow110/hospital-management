@@ -58,7 +58,12 @@ class PatientService {
    */
   async getPatient(id, context) {
     if (!context.can(PERMISSIONS.PATIENT_VIEW)) {
+      await this._audit.recordSecurityEvent(context, 'patient.view.denied', { id });
       throw new AppError(ERROR_CODES.PERMISSION_DENIED, 'patient.view permission required');
+    }
+    if (context.hasRole('patient') && context.userId !== id) {
+      await this._audit.recordSecurityEvent(context, 'patient.read.idor.denied', { id });
+      throw new AppError(ERROR_CODES.PERMISSION_DENIED, 'Cannot access another patient record');
     }
     const patient = await this._repo.findById(id, context);
     if (!patient) {

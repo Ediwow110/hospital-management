@@ -27,6 +27,7 @@ class AppContext {
    * @param {string} [params.ipAddress]
    * @param {string} [params.deviceInfo]
    * @param {string} [params.idempotencyKey]
+   * @param {string} [params.tokenJti]
    */
   constructor({
     requestId,
@@ -38,6 +39,7 @@ class AppContext {
     ipAddress = '',
     deviceInfo = '',
     idempotencyKey = null,
+    tokenJti = null,
   }) {
     if (!requestId) throw new Error('AppContext: requestId required');
     if (!tenantId) throw new Error('AppContext: tenantId required');
@@ -53,6 +55,7 @@ class AppContext {
     this.ipAddress = ipAddress;
     this.deviceInfo = deviceInfo;
     this.idempotencyKey = idempotencyKey;
+    this.tokenJti = tokenJti;
   }
 
   /**

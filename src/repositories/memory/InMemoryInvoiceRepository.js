@@ -1,11 +1,19 @@
 'use strict';
 
 const { InMemoryStore } = require('./InMemoryStore');
+const { AppError, ERROR_CODES } = require('../../core/AppError');
 
 class InMemoryInvoiceRepository extends InMemoryStore {
   async findById(id, context, tx) {
     const record = this._get(id);
-    if (!record || record.tenantId !== context.tenantId) return null;
+    if (!record) return null;
+    if (record.tenantId !== context.tenantId) {
+      throw new AppError(ERROR_CODES.PERMISSION_DENIED, 'Cross-tenant invoice access denied', {
+        crossTenant: true,
+        entityType: 'invoice',
+        entityId: id,
+      });
+    }
     return record;
   }
 

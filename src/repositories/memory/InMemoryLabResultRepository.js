@@ -19,7 +19,14 @@ class InMemoryLabResultRepository extends InMemoryStore {
 
   async findById(id, context, tx) {
     const record = this._get(id);
-    if (!record || record.tenantId !== context.tenantId) return null;
+    if (!record) return null;
+    if (record.tenantId !== context.tenantId) {
+      throw new AppError(ERROR_CODES.PERMISSION_DENIED, 'Cross-tenant lab result access denied', {
+        crossTenant: true,
+        entityType: 'lab_result',
+        entityId: id,
+      });
+    }
     return record;
   }
 

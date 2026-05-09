@@ -16,6 +16,7 @@ function buildApp(container) {
 
   app.use(express.json());
   app.use(attachRequestId);
+  app.locals.services = container.services;
 
   const router = buildRouter(container, authenticate);
   app.use('/', router);

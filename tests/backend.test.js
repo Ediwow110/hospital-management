@@ -15,6 +15,7 @@
 
 const assert = require('assert');
 const { randomUUID } = require('crypto');
+process.env.JWT_SECRET = process.env.JWT_SECRET || 'security-hardened-staging-foundation-secret-1234567890';
 
 const { AppContext } = require('../src/core/AppContext');
 const { AppError, ERROR_CODES } = require('../src/core/AppError');
@@ -32,11 +33,15 @@ const { InMemoryLabResultRepository } = require('../src/repositories/memory/InMe
 
 const { AuditService } = require('../src/services/AuditService');
 const { AuthService } = require('../src/services/AuthService');
+const { SecurityAuditService } = require('../src/services/SecurityAuditService');
+const { InMemoryInvalidatedTokenRepository } = require('../src/repositories/memory/InMemoryInvalidatedTokenRepository');
+const { InMemorySecurityAuditEventRepository } = require('../src/repositories/memory/InMemorySecurityAuditEventRepository');
 const { HealthService } = require('../src/services/HealthService');
 const { PatientService } = require('../src/services/PatientService');
 const { OrderService } = require('../src/services/OrderService');
 const { BillingService } = require('../src/services/BillingService');
 const { LabService } = require('../src/services/LabService');
+const { hashPassword } = require('../src/auth/hash');
 
 // ---------------------------------------------------------------------------
 // Test helpers
@@ -85,6 +90,11 @@ async function test(name, fn) {
 
 const auditLogRepo = new InMemoryAuditLogRepository();
 const auditService = new AuditService({ auditLogRepo });
+const securityAuditService = new SecurityAuditService({
+  adapter: 'memory',
+  repo: new InMemorySecurityAuditEventRepository(),
+});
+const invalidatedTokenRepo = new InMemoryInvalidatedTokenRepository();
 
 const userRepo = new InMemoryUserRepository();
 const patientRepo = new InMemoryPatientRepository();
@@ -94,25 +104,14 @@ const paymentRepo = new InMemoryPaymentRepository();
 const cashierSessionRepo = new InMemoryCashierSessionRepository();
 const labResultRepo = new InMemoryLabResultRepository();
 
-const authService = new AuthService({ userRepo, auditService });
+const authService = new AuthService({ userRepo, auditService, securityAuditService, invalidatedTokenRepo });
 const healthService = new HealthService();
 const patientService = new PatientService({ patientRepo, auditService });
 const orderService = new OrderService({ orderRepo, invoiceRepo, auditService });
 const billingService = new BillingService({ invoiceRepo, paymentRepo, cashierSessionRepo, auditService });
 const labService = new LabService({ labResultRepo, auditService });
 
-// Seed a test user (passwordHash = plaintext for demo per AuthService docs)
 const TEST_USER_ID = randomUUID();
-userRepo._set(TEST_USER_ID, {
-  id: TEST_USER_ID,
-  tenantId: TENANT_ID,
-  branchId: BRANCH_ID,
-  email: 'admin@test.com',
-  passwordHash: 'password123',
-  name: 'Test Admin',
-  roles: ['superadmin'],
-  status: 'active',
-});
 
 // ---------------------------------------------------------------------------
 // Tests
@@ -121,6 +120,17 @@ userRepo._set(TEST_USER_ID, {
 (async () => {
   console.log('\nPR #3 Backend Workflow Tests');
   console.log('==============================\n');
+
+  userRepo._set(TEST_USER_ID, {
+    id: TEST_USER_ID,
+    tenantId: TENANT_ID,
+    branchId: BRANCH_ID,
+    email: 'admin@test.com',
+    passwordHash: await hashPassword('password123'),
+    name: 'Test Admin',
+    roles: ['superadmin'],
+    status: 'active',
+  });
 
   // -- Health Check --
   console.log('Health Check');
@@ -158,7 +168,7 @@ userRepo._set(TEST_USER_ID, {
 
   await test('decodeToken returns valid AppContext', async () => {
     const { token } = await authService.login('admin@test.com', 'password123', TENANT_ID, '127.0.0.1');
-    const ctx = authService.decodeToken(token, randomUUID(), '127.0.0.1');
+    const ctx = await authService.decodeToken(token, randomUUID(), '127.0.0.1');
     assert.ok(ctx instanceof AppContext);
     assert.strictEqual(ctx.tenantId, TENANT_ID);
   });

@@ -170,6 +170,18 @@ class BillingService {
 
     return { payment, invoice: updatedInvoice };
   }
+
+  async getInvoice(invoiceId, context) {
+    if (!context.can(PERMISSIONS.BILLING_INVOICE_VIEW)) {
+      await this._audit.recordSecurityEvent(context, 'billing.invoice.view.denied', { invoiceId });
+      throw new AppError(ERROR_CODES.PERMISSION_DENIED, 'billing.invoice.view permission required');
+    }
+    const invoice = await this._invoices.findById(invoiceId, context);
+    if (!invoice) {
+      throw new AppError(ERROR_CODES.NOT_FOUND, `Invoice ${invoiceId} not found`);
+    }
+    return invoice;
+  }
 }
 
 module.exports = { BillingService };

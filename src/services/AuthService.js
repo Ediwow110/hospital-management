@@ -25,7 +25,10 @@ class AuthService {
     this._audit = auditService;
     this._securityAudit = securityAuditService;
     this._invalidatedTokens = invalidatedTokenRepo;
-    this._jwtSecret = process.env.JWT_SECRET || 'test-jwt-secret-test-jwt-secret-1234';
+    this._jwtSecret = process.env.JWT_SECRET;
+    if (!this._jwtSecret) {
+      throw new Error('JWT_SECRET is required');
+    }
     this._jwtExpiry = process.env.JWT_EXPIRES_IN || '1h';
   }
 

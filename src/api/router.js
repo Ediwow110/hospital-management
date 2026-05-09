@@ -5,6 +5,7 @@ const rateLimit = require('express-rate-limit');
 const { AppError, ERROR_CODES } = require('../core/AppError');
 const { PERMISSIONS } = require('../core/permissions');
 const { SECURITY_EVENT_TYPES } = require('../services/SecurityAuditService');
+const DEFAULT_LOGIN_RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000;
 
 /**
  * buildRouter — wires all API routes.
@@ -17,7 +18,7 @@ function buildRouter(container, authenticate) {
   const router = express.Router();
   const { services } = container;
   const auth = authenticate(services.authService);
-  const windowMs = Number(process.env.LOGIN_RATE_LIMIT_WINDOW_MS || 15 * 60 * 1000);
+  const windowMs = Number(process.env.LOGIN_RATE_LIMIT_WINDOW_MS || DEFAULT_LOGIN_RATE_LIMIT_WINDOW_MS);
   const buildLoginRateKey = req => {
     const tenantId = (req.body && req.body.tenantId) || 'unknown-tenant';
     const email = (req.body && req.body.email) || 'unknown-email';

@@ -15,6 +15,7 @@
 
 const assert = require('assert');
 const { randomUUID } = require('crypto');
+process.env.JWT_SECRET = process.env.JWT_SECRET || 'security-hardened-staging-foundation-secret-1234567890';
 
 const { AppContext } = require('../src/core/AppContext');
 const { AppError, ERROR_CODES } = require('../src/core/AppError');

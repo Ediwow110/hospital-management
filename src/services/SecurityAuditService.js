@@ -18,7 +18,7 @@ class SecurityAuditService {
   }
 
   async log(eventType, context = {}) {
-    if (!Object.prototype.hasOwnProperty.call(SECURITY_EVENT_TYPES, eventType)) {
+    if (!Object.hasOwn(SECURITY_EVENT_TYPES, eventType)) {
       throw new Error(`Unsupported security event type: ${eventType}`);
     }
 

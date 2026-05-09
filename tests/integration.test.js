@@ -42,49 +42,49 @@ async function test(name, fn) {
   } catch (err) {
     console.error('  FAIL  ' + name + ': ' + err.message);
     failed++;
-    failures.push({ name, error: err.message });
+    failures.push({ name: name, error: err.message });
   }
 }
 
 async function seedFixtures() {
-  const planRes = await pool.query(
-    "INSERT INTO plans (name, features) VALUES ($1, '{}') ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name RETURNING id",
-    ['integration-test-plan']
+  var planRes = await pool.query(
+    'INSERT INTO plans (name, features) VALUES ($1, $2) ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name RETURNING id',
+    ['integration-test-plan', '{}']
   );
-  const planId = planRes.rows[0].id;
-  const slug = 'integration-' + randomUUID().slice(0, 8);
-  const tenantRes = await pool.query(
+  var planId = planRes.rows[0].id;
+  var slug = 'integration-' + randomUUID().slice(0, 8);
+  var tenantRes = await pool.query(
     'INSERT INTO tenants (name, slug, plan_id) VALUES ($1, $2, $3) RETURNING id',
     ['Integration Tenant', slug, planId]
   );
-  const tenantId = tenantRes.rows[0].id;
-  const code = 'INTB' + randomUUID().slice(0, 4).toUpperCase();
-  const branchRes = await pool.query(
+  var tenantId = tenantRes.rows[0].id;
+  var code = 'INTB' + randomUUID().slice(0, 4).toUpperCase();
+  var branchRes = await pool.query(
     'INSERT INTO branches (tenant_id, name, code) VALUES ($1, $2, $3) RETURNING id',
     [tenantId, 'Integration Branch', code]
   );
-  const branchId = branchRes.rows[0].id;
-  const email = 'actor-' + randomUUID().slice(0, 8) + '@test.local';
-  const userRes = await pool.query(
+  var branchId = branchRes.rows[0].id;
+  var email = 'actor-' + randomUUID().slice(0, 8) + '@test.local';
+  var userRes = await pool.query(
     'INSERT INTO users (tenant_id, branch_id, full_name, email, password_hash, role) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id',
     [tenantId, branchId, 'Integration Actor', email, '$2b$10$placeholder', 'superadmin']
   );
-  const userId = userRes.rows[0].id;
-  return { planId, tenantId, branchId, userId };
+  var userId = userRes.rows[0].id;
+  return { planId: planId, tenantId: tenantId, branchId: branchId, userId: userId };
 }
 
 async function cleanup(tenantId) {
-  try { await pool.query('DELETE FROM approval_requests WHERE tenant_id = $1', [tenantId]); } catch (_) {}
-  try { await pool.query('DELETE FROM audit_logs WHERE tenant_id = $1', [tenantId]); } catch (_) {}
+  try { await pool.query('DELETE FROM approval_requests WHERE tenant_id = $1', [tenantId]); } catch (e) { void e; }
+  try { await pool.query('DELETE FROM audit_logs WHERE tenant_id = $1', [tenantId]); } catch (e) { void e; }
   await pool.query('DELETE FROM users WHERE tenant_id = $1', [tenantId]);
   await pool.query('DELETE FROM branches WHERE tenant_id = $1', [tenantId]);
   await pool.query('DELETE FROM tenants WHERE id = $1', [tenantId]);
 }
 
 async function runTests() {
-  console.log('\nRunning PostgreSQL integration tests...');
+  console.log('Running PostgreSQL integration tests...');
 
-  let fixtures;
+  var fixtures;
   try {
     fixtures = await seedFixtures();
   } catch (err) {
@@ -93,31 +93,33 @@ async function runTests() {
     process.exit(1);
   }
 
-  const { tenantId, branchId, userId } = fixtures;
+  var tenantId = fixtures.tenantId;
+  var branchId = fixtures.branchId;
+  var userId = fixtures.userId;
 
   console.log('--- Repository instantiation ---');
 
-  await test('PgUserRepository instantiates', async () => {
-    const r = new PgUserRepository({ pool });
+  await test('PgUserRepository instantiates', async function() {
+    var r = new PgUserRepository({ pool: pool });
     assert.ok(r);
   });
 
-  await test('PgAuditLogRepository instantiates', async () => {
-    const r = new PgAuditLogRepository({ pool });
+  await test('PgAuditLogRepository instantiates', async function() {
+    var r = new PgAuditLogRepository({ pool: pool });
     assert.ok(r);
   });
 
-  await test('PgLabResultRepository instantiates', async () => {
-    const r = new PgLabResultRepository({ pool });
+  await test('PgLabResultRepository instantiates', async function() {
+    var r = new PgLabResultRepository({ pool: pool });
     assert.ok(r);
   });
 
-  console.log('\n--- User CRUD via parameterized SQL ---');
+  console.log('--- User CRUD via parameterized SQL ---');
 
-  let testUserId;
-  await test('INSERT user with parameterized SQL', async () => {
-    const email = 'crud-' + randomUUID().slice(0, 8) + '@test.local';
-    const res = await pool.query(
+  var testUserId;
+  await test('INSERT user', async function() {
+    var email = 'crud-' + randomUUID().slice(0, 8) + '@test.local';
+    var res = await pool.query(
       'INSERT INTO users (tenant_id, branch_id, full_name, email, password_hash, role) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, role',
       [tenantId, branchId, 'CRUD User', email, '$2b$10$ph', 'nurse']
     );
@@ -125,42 +127,49 @@ async function runTests() {
     testUserId = res.rows[0].id;
   });
 
-  await test('SELECT user by id', async () => {
-    const res = await pool.query('SELECT id FROM users WHERE id = $1 AND tenant_id = $2', [testUserId, tenantId]);
+  await test('SELECT user by id', async function() {
+    var res = await pool.query(
+      'SELECT id FROM users WHERE id = $1 AND tenant_id = $2',
+      [testUserId, tenantId]
+    );
     assert.strictEqual(res.rows.length, 1);
   });
 
-  await test('UPDATE user role', async () => {
+  await test('UPDATE user role', async function() {
     await pool.query('UPDATE users SET role = $1 WHERE id = $2', ['doctor', testUserId]);
-    const res = await pool.query('SELECT role FROM users WHERE id = $1', [testUserId]);
+    var res = await pool.query('SELECT role FROM users WHERE id = $1', [testUserId]);
     assert.strictEqual(res.rows[0].role, 'doctor');
   });
 
-  console.log('\n--- audit_logs immutability trigger ---');
+  console.log('--- audit_logs immutability trigger ---');
 
-  let auditLogId;
-  await test('INSERT audit_log row', async () => {
-    const res = await pool.query(
-      "INSERT INTO audit_logs (tenant_id, branch_id, actor_user_id, action, entity_type, payload) VALUES ($1, $2, $3, $4, $5, '{""test\"":true}') RETURNING id, action",
-      [tenantId, branchId, userId, 'test.action', 'user']
+  var auditLogId;
+  await test('INSERT audit_log row', async function() {
+    var payload = JSON.stringify({ test: true });
+    var res = await pool.query(
+      'INSERT INTO audit_logs (tenant_id, branch_id, actor_user_id, action, entity_type, payload) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, action',
+      [tenantId, branchId, userId, 'test.action', 'user', payload]
     );
     assert.ok(res.rows[0].id);
     auditLogId = res.rows[0].id;
   });
 
-  await test('UPDATE audit_log is blocked by trigger', async () => {
-    let threw = false;
+  await test('UPDATE audit_log blocked by trigger', async function() {
+    var threw = false;
     try {
       await pool.query('UPDATE audit_logs SET action = $1 WHERE id = $2', ['tampered', auditLogId]);
     } catch (err) {
       threw = true;
-      assert.ok(err.message.includes('immutable') || err.message.includes('audit'), 'Expected immutability error: ' + err.message);
+      assert.ok(
+        err.message.includes('immutable') || err.message.includes('audit'),
+        'Expected immutability error, got: ' + err.message
+      );
     }
     assert.ok(threw, 'UPDATE on audit_logs must throw');
   });
 
-  await test('DELETE audit_log is blocked by trigger', async () => {
-    let threw = false;
+  await test('DELETE audit_log blocked by trigger', async function() {
+    var threw = false;
     try {
       await pool.query('DELETE FROM audit_logs WHERE id = $1', [auditLogId]);
     } catch (err) {
@@ -169,24 +178,24 @@ async function runTests() {
     assert.ok(threw, 'DELETE on audit_logs must throw');
   });
 
-  console.log('\n--- withTransaction commit and rollback ---');
+  console.log('--- withTransaction commit and rollback ---');
 
-  await test('withTransaction commits', async () => {
-    const email = 'txn-commit-' + randomUUID().slice(0, 8) + '@test.local';
-    await withTransaction(pool, async (client) => {
+  await test('withTransaction commits', async function() {
+    var email = 'txn-commit-' + randomUUID().slice(0, 8) + '@test.local';
+    await withTransaction(pool, async function(client) {
       await client.query(
         'INSERT INTO users (tenant_id, branch_id, full_name, email, password_hash, role) VALUES ($1, $2, $3, $4, $5, $6)',
         [tenantId, branchId, 'Txn Commit', email, '$2b$10$ph', 'nurse']
       );
     });
-    const res = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
+    var res = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
     assert.strictEqual(res.rows.length, 1, 'committed row must exist');
   });
 
-  await test('withTransaction rolls back on error', async () => {
-    const email = 'txn-rollback-' + randomUUID().slice(0, 8) + '@test.local';
+  await test('withTransaction rolls back on error', async function() {
+    var email = 'txn-rollback-' + randomUUID().slice(0, 8) + '@test.local';
     try {
-      await withTransaction(pool, async (client) => {
+      await withTransaction(pool, async function(client) {
         await client.query(
           'INSERT INTO users (tenant_id, branch_id, full_name, email, password_hash, role) VALUES ($1, $2, $3, $4, $5, $6)',
           [tenantId, branchId, 'Txn Rollback', email, '$2b$10$ph', 'nurse']
@@ -196,17 +205,17 @@ async function runTests() {
     } catch (err) {
       assert.strictEqual(err.message, 'deliberate rollback');
     }
-    const res = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
+    var res = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
     assert.strictEqual(res.rows.length, 0, 'rolled-back row must not exist');
   });
 
   await cleanup(tenantId);
   await pool.end();
 
-  console.log('\n' + '='.repeat(60));
+  console.log('='.repeat(60));
   console.log('Results: ' + passed + ' passed, ' + failed + ' failed');
   if (failures.length > 0) {
-    console.log('\nFailures:');
+    console.log('Failures:');
     failures.forEach(function(f) { console.log('  - ' + f.name + ': ' + f.error); });
     process.exit(1);
   } else {

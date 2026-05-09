@@ -81,6 +81,7 @@ class AuthService {
       {
         userId: user.id,
         tenantId,
+              branchId: user.branchId || 'system',
         roles: user.roles,
         iat: Date.now(),
       },

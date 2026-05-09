@@ -1,0 +1,173 @@
+{
+  "version": "1.0.0",
+  "source": "Hospital Management System Strong Production-Level Plan, 2026-05-08",
+  "roles": [
+    "super_admin",
+    "client_admin",
+    "branch_admin",
+    "manager",
+    "department_manager",
+    "receptionist",
+    "cashier",
+    "nurse",
+    "doctor",
+    "med_tech",
+    "pathologist",
+    "radiology_staff",
+    "pharmacist",
+    "inventory_staff",
+    "procurement_staff",
+    "hr_staff",
+    "hr_manager",
+    "patient",
+    "auditor"
+  ],
+  "actions": [
+    {
+      "action": "Register patient",
+      "permission": "patient.create",
+      "allowedRoles": ["receptionist", "manager", "branch_admin", "super_admin"],
+      "requiresReason": false,
+      "requiresApproval": false,
+      "auditRequired": true
+    },
+    {
+      "action": "Create service order",
+      "permission": "order.create",
+      "allowedRoles": ["receptionist", "doctor", "manager", "branch_admin", "super_admin"],
+      "requiresReason": false,
+      "requiresApproval": false,
+      "auditRequired": true
+    },
+    {
+      "action": "Accept payment",
+      "permission": "billing.payment.create",
+      "allowedRoles": ["cashier", "manager", "branch_admin", "super_admin"],
+      "requiresReason": false,
+      "requiresApproval": false,
+      "auditRequired": true,
+      "requiresIdempotencyKey": true
+    },
+    {
+      "action": "Void payment",
+      "requestPermission": "billing.payment.void.request",
+      "approvePermission": "billing.payment.void.approve",
+      "requestRoles": ["cashier", "manager", "branch_admin", "super_admin"],
+      "approveRoles": ["manager", "branch_admin", "super_admin"],
+      "requiresReason": true,
+      "requiresApproval": true,
+      "auditRequired": true,
+      "requiresIdempotencyKey": true
+    },
+    {
+      "action": "Refund payment",
+      "requestPermission": "billing.refund.request",
+      "approvePermission": "billing.refund.approve",
+      "requestRoles": ["cashier", "manager", "branch_admin", "super_admin"],
+      "approveRoles": ["manager", "branch_admin", "super_admin"],
+      "requiresReason": true,
+      "requiresApproval": true,
+      "auditRequired": true,
+      "requiresIdempotencyKey": true
+    },
+    {
+      "action": "Encode lab result",
+      "permission": "lab.result.encode",
+      "allowedRoles": ["med_tech", "super_admin"],
+      "requiresReason": false,
+      "requiresApproval": false,
+      "auditRequired": true,
+      "requiresIdempotencyKey": true
+    },
+    {
+      "action": "Approve lab result",
+      "permission": "lab.result.approve",
+      "allowedRoles": ["pathologist", "super_admin"],
+      "requiresReason": false,
+      "requiresApproval": false,
+      "auditRequired": true,
+      "requiresIdempotencyKey": true,
+      "dualApproval": true
+    },
+    {
+      "action": "Release lab result",
+      "permission": "lab.result.release",
+      "allowedRoles": ["pathologist", "super_admin"],
+      "requiresReason": false,
+      "requiresApproval": false,
+      "auditRequired": true,
+      "requiresIdempotencyKey": true
+    },
+    {
+      "action": "Amend released result",
+      "requestPermission": "lab.result.amend.request",
+      "approvePermission": "lab.result.amend.approve",
+      "requestRoles": ["med_tech", "pathologist", "super_admin"],
+      "approveRoles": ["pathologist", "super_admin"],
+      "requiresReason": true,
+      "requiresApproval": true,
+      "auditRequired": true,
+      "requiresIdempotencyKey": true
+    },
+    {
+      "action": "Adjust inventory",
+      "requestPermission": "inventory.adjust.request",
+      "approvePermission": "inventory.adjust.approve",
+      "requestRoles": ["inventory_staff", "procurement_staff", "manager", "super_admin"],
+      "approveRoles": ["manager", "branch_admin", "super_admin"],
+      "requiresReason": true,
+      "requiresApproval": true,
+      "auditRequired": true,
+      "requiresIdempotencyKey": true
+    },
+    {
+      "action": "Receive inventory",
+      "permission": "inventory.receive",
+      "allowedRoles": ["inventory_staff", "procurement_staff", "manager", "super_admin"],
+      "requiresReason": false,
+      "requiresApproval": false,
+      "auditRequired": true,
+      "requiresIdempotencyKey": true
+    },
+    {
+      "action": "Offboard employee",
+      "requestPermission": "hr.offboard.request",
+      "approvePermission": "user.deactivate",
+      "requestRoles": ["hr_manager", "super_admin"],
+      "approveRoles": ["branch_admin", "super_admin"],
+      "requiresReason": true,
+      "requiresApproval": true,
+      "auditRequired": true,
+      "requiresIdempotencyKey": true
+    },
+    {
+      "action": "Export report",
+      "permission": "report.export",
+      "allowedRoles": ["cashier", "doctor", "manager", "hr_manager", "branch_admin", "client_admin", "super_admin"],
+      "requiresReason": true,
+      "requiresApproval": false,
+      "auditRequired": true,
+      "requiresIdempotencyKey": true
+    },
+    {
+      "action": "Change roles",
+      "permission": "admin.role.change",
+      "allowedRoles": ["super_admin"],
+      "requiresReason": true,
+      "requiresApproval": true,
+      "auditRequired": true,
+      "requiresIdempotencyKey": true
+    },
+    {
+      "action": "Restore backup",
+      "requestPermission": "backup.restore.request",
+      "approvePermission": "backup.restore.approve",
+      "requestRoles": ["branch_admin", "super_admin"],
+      "approveRoles": ["super_admin"],
+      "requiresReason": true,
+      "requiresApproval": true,
+      "auditRequired": true,
+      "requiresIdempotencyKey": true
+    }
+  ]
+}

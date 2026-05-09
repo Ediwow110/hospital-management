@@ -90,8 +90,9 @@ Rules:
 4. The system creates an order, locks service names/prices/versions into the order items, and creates an invoice.
 5. Cashier posts payment.
 6. The payment engine blocks overpayment unless enabled in settings.
-7. Fully paid invoices are locked and trigger queue tickets for downstream services.
-8. Registration, order, invoice, and payment actions are audit-logged.
+7. Receipt preview and print are allowed only after posted payment.
+8. Fully paid invoices are locked and trigger queue tickets for downstream services.
+9. Registration, order, invoice, receipt, and payment actions are audit-logged.
 
 ### Lab Order to Result Release
 
@@ -101,10 +102,19 @@ Rules:
 4. Processing starts only after receipt.
 5. Med-tech encodes result values.
 6. Authorized lab approver validates the encoded result.
-7. Authorized approver approves the validated result.
-8. Authorized user releases the approved result.
-9. Released result is locked, a private patient document is created, and a privacy-safe notification is queued.
-10. Result print/download is allowed only after release and is audit-logged.
+7. Result approval screen checks payment, specimen receipt, encoding, dual approval, and result locking.
+8. Authorized approver approves the validated result.
+9. Authorized user releases the approved result.
+10. Released result is locked, a private patient document is created, and a privacy-safe notification is queued.
+11. Result print/download is allowed only after release and is audit-logged.
+
+### Tenant, Feature, and API Scope
+
+1. Every authenticated request carries tenant context.
+2. Branch-scoped users can access only assigned branches.
+3. Feature flags gate module access by tenant.
+4. High-risk write endpoints require idempotency keys.
+5. Controllers call domain services that validate scope, permissions, workflow transition, transaction writes, audit logs, and background jobs.
 
 ### Billing to Cashier Closing
 

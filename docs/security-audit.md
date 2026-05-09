@@ -85,8 +85,18 @@ Examples:
 - Result-ready notifications are blocked until release and use privacy-safe text.
 - Sensitive exports require a reason and are audit-logged.
 - Runtime UI errors are logged to the audit trail in the prototype.
+- Production rule tests cover tenant isolation, branch isolation, immutable audit payloads, idempotency keys for payment writes, notification privacy, and feature flag gating.
 
 These controls are prototype-level safeguards. A production implementation must enforce the same rules again on the server, in the database, and at the file storage boundary.
+
+## Production Additions
+
+- Add `tenant_id` scoping for SaaS-owned data and reject cross-tenant reads/writes.
+- Require `Idempotency-Key` for payment, refund, void, result release, inventory movement, export, import, and backup/restore writes.
+- Store API tokens hashed with explicit scopes and tenant ownership.
+- Store integration, webhook, email, SMS, failed-job, backup, and system-health logs.
+- Mask patient identity on public QR verification and lower-privilege report views.
+- Enforce private file storage with signed URLs and download/print audit logs.
 
 ## Testing Requirements
 

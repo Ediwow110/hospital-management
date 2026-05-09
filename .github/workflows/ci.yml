@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - main
+      - "codex/**"
       - pr3-backend-runtime
       - "pr3/**"
 
@@ -15,18 +16,69 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: "22"
 
       - name: Install dependencies
         run: npm install --ignore-scripts 2>/dev/null || true
 
-      - name: Syntax checks (npm run check)
+      - name: Syntax checks
         run: npm run check
 
-      - name: Backend workflow tests (npm test)
+      - name: Production tests
         run: npm test
+
+  integration-test:
+    name: PostgreSQL integration tests
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: hms
+          POSTGRES_PASSWORD: hmsdev
+          POSTGRES_DB: hms_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://hms:hmsdev@localhost:5432/hms_test
+      NODE_ENV: test
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+
+      - name: Install dependencies
+        run: npm install --ignore-scripts 2>/dev/null || true
+
+      - name: Wait for PostgreSQL
+        run: |
+          until pg_isready -h localhost -U hms; do
+            echo 'Waiting for PostgreSQL...'
+            sleep 1
+          done
+
+      - name: Run migrations
+        run: |
+          for f in migrations/*.sql; do
+            psql "$DATABASE_URL" -f "$f"
+          done
+
+      - name: PostgreSQL integration tests
+        run: npm run test:integration

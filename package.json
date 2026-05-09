@@ -9,7 +9,7 @@
     "uuid": "^9.0.1"
   },
   "scripts": {
-    "start:api": "node src/api/server.js",,
+    "start:api": "node src/api/server.js",
     "start": "node src/api/server.js",
     "dev": "node --watch src/api/server.js",
     "test:backend": "node tests/backend.test.js"

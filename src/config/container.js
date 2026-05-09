@@ -8,7 +8,6 @@
  *   postgres — uses PostgreSQL-backed security repositories
  */
 
-const bcrypt = require('bcryptjs');
 const { Pool } = require('pg');
 
 const { InMemoryUserRepository } = require('../repositories/memory/InMemoryUserRepository');
@@ -39,6 +38,15 @@ const { BillingService } = require('../services/BillingService');
 const { QueueService } = require('../services/QueueService');
 const { LabService } = require('../services/LabService');
 const { InventoryService } = require('../services/InventoryService');
+
+const DEMO_USER_PASSWORD_HASHES = Object.freeze({
+  admin: '$2a$12$DDkxyC6KvO5NMeGfwx3Qf.MRmLtY.QQQXRMT8TJ8Oe.daIpnwZORC',
+  manager: '$2a$12$u5xZZLsvwGOhh4CNQ2BLduW99fvwNT18TmECfPwZKSEz1eRAs6JUe',
+  recept: '$2a$12$MYx.PP5erVWDgtcFwoI/Ou3ZKBqhZIfE92AcgHNk6Ag2ZPtWIOHlu',
+  cashier: '$2a$12$t5CBB0Z4PTVS4vuMkmsRl.o5r2Z.J5Y9UZQOZ28FlHpALIAUHaqeK',
+  medtech: '$2a$12$sqh3XR/xOgVNFBnndM9ItuJv5Tzfp/A47E17c18BIt5wmtF2F.3sy',
+  pathol: '$2a$12$Q.GNcfQJLyRoM4xNyYyjKu86yuSZuEoxVE4h3U1gicynu5dD4AwYC',
+});
 
 function buildContainer() {
   const adapter = process.env.STORAGE_ADAPTER || 'memory';
@@ -137,12 +145,12 @@ function _seedDemoUsers(userRepo) {
   };
 
   const users = [
-    { id: 'u-admin', email: 'admin@demo.local', passwordHash: bcrypt.hashSync('admin123', 12), name: 'Admin User', roles: ['superadmin'], branchId: 'branch-main', status: 'active' },
-    { id: 'u-manager', email: 'manager@demo.local', passwordHash: bcrypt.hashSync('manager123', 12), name: 'Branch Manager', roles: ['branch_manager'], branchId: 'branch-main', status: 'active' },
-    { id: 'u-recept', email: 'recept@demo.local', passwordHash: bcrypt.hashSync('recept123', 12), name: 'Receptionist', roles: ['receptionist'], branchId: 'branch-main', status: 'active' },
-    { id: 'u-cashier', email: 'cashier@demo.local', passwordHash: bcrypt.hashSync('cashier123', 12), name: 'Cashier', roles: ['cashier'], branchId: 'branch-main', status: 'active' },
-    { id: 'u-medtech', email: 'medtech@demo.local', passwordHash: bcrypt.hashSync('medtech123', 12), name: 'Med Tech', roles: ['medtech'], branchId: 'branch-main', status: 'active' },
-    { id: 'u-pathol', email: 'pathol@demo.local', passwordHash: bcrypt.hashSync('pathol123', 12), name: 'Pathologist', roles: ['pathologist'], branchId: 'branch-main', status: 'active' },
+    { id: 'u-admin', email: 'admin@demo.local', passwordHash: DEMO_USER_PASSWORD_HASHES.admin, name: 'Admin User', roles: ['superadmin'], branchId: 'branch-main', status: 'active' },
+    { id: 'u-manager', email: 'manager@demo.local', passwordHash: DEMO_USER_PASSWORD_HASHES.manager, name: 'Branch Manager', roles: ['branch_manager'], branchId: 'branch-main', status: 'active' },
+    { id: 'u-recept', email: 'recept@demo.local', passwordHash: DEMO_USER_PASSWORD_HASHES.recept, name: 'Receptionist', roles: ['receptionist'], branchId: 'branch-main', status: 'active' },
+    { id: 'u-cashier', email: 'cashier@demo.local', passwordHash: DEMO_USER_PASSWORD_HASHES.cashier, name: 'Cashier', roles: ['cashier'], branchId: 'branch-main', status: 'active' },
+    { id: 'u-medtech', email: 'medtech@demo.local', passwordHash: DEMO_USER_PASSWORD_HASHES.medtech, name: 'Med Tech', roles: ['medtech'], branchId: 'branch-main', status: 'active' },
+    { id: 'u-pathol', email: 'pathol@demo.local', passwordHash: DEMO_USER_PASSWORD_HASHES.pathol, name: 'Pathologist', roles: ['pathologist'], branchId: 'branch-main', status: 'active' },
   ];
 
   for (const user of users) {

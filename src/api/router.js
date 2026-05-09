@@ -1,8 +1,10 @@
 'use strict';
 
 const express = require('express');
+const rateLimit = require('express-rate-limit');
 const { AppError, ERROR_CODES } = require('../core/AppError');
 const { PERMISSIONS } = require('../core/permissions');
+const { SECURITY_EVENT_TYPES } = require('../services/SecurityAuditService');
 
 /**
  * buildRouter — wires all API routes.
@@ -11,11 +13,39 @@ const { PERMISSIONS } = require('../core/permissions');
  * @param {{ services: object }} container
  * @returns {express.Router}
  */
-function buildRouter(container, authenticate, buildLoginRateLimiter) {
+function buildRouter(container, authenticate) {
   const router = express.Router();
   const { services } = container;
   const auth = authenticate(services.authService);
-  const loginRateLimiter = buildLoginRateLimiter(services.securityAuditService);
+  const windowMs = Number(process.env.LOGIN_RATE_LIMIT_WINDOW_MS || 15 * 60 * 1000);
+  const buildLoginRateKey = req => {
+    const tenantId = (req.body && req.body.tenantId) || 'unknown-tenant';
+    const email = (req.body && req.body.email) || 'unknown-email';
+    const ip = req.ip || '';
+    return `${tenantId}::${String(email).toLowerCase()}::${ip}`;
+  };
+  const loginRateLimiter = rateLimit({
+    windowMs,
+    max: Number(process.env.LOGIN_RATE_LIMIT_MAX_ATTEMPTS || 5),
+    standardHeaders: true,
+    legacyHeaders: false,
+    skipSuccessfulRequests: true,
+    keyGenerator: buildLoginRateKey,
+    handler: async (req, res) => {
+      const retryAfter = Math.ceil(windowMs / 1000);
+      await services.securityAuditService.log(SECURITY_EVENT_TYPES.LOGIN_LOCKOUT, {
+        tenantId: (req.body && req.body.tenantId) || 'unknown-tenant',
+        userId: (req.body && req.body.email) || null,
+        ipAddress: req.ip || '',
+        metadata: { key: buildLoginRateKey(req), retryAfter },
+      });
+      return res.status(429).json({
+        error: 'TOO_MANY_REQUESTS',
+        message: 'Too many failed login attempts. Try again later.',
+        retryAfter,
+      });
+    },
+  });
 
   // -------------------------------------------------------------------------
   // Health

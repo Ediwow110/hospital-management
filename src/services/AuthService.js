@@ -7,6 +7,7 @@ const { ROLE_PERMISSIONS } = require('../core/permissions');
 const { AppContext } = require('../core/AppContext');
 const { verifyPassword } = require('../auth/hash');
 const { SECURITY_EVENT_TYPES } = require('./SecurityAuditService');
+const REQUIRED_TOKEN_FIELDS = ['userId', 'tenantId', 'branchId', 'roles', 'jti', 'iat', 'exp'];
 
 /**
  * AuthService — demo login only.
@@ -137,7 +138,8 @@ class AuthService {
   async decodeToken(token, requestId, ipAddress, deviceInfo = '') {
     try {
       const payload = jwt.verify(token, this._jwtSecret);
-      if (!payload.userId || !payload.tenantId || !payload.branchId || !Array.isArray(payload.roles) || !payload.jti || !payload.iat || !payload.exp) {
+      const hasAllRequiredFields = REQUIRED_TOKEN_FIELDS.every(field => payload[field]);
+      if (!hasAllRequiredFields || !Array.isArray(payload.roles)) {
         throw new Error('Invalid token payload');
       }
       if (this._invalidatedTokens && await this._invalidatedTokens.isInvalidated(payload.jti)) {

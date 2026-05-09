@@ -1,7 +1,6 @@
 'use strict';
 
 const { randomUUID } = require('crypto');
-const rateLimit = require('express-rate-limit');
 const { AppError, ERROR_CODES } = require('../core/AppError');
 const { SECURITY_EVENT_TYPES } = require('../services/SecurityAuditService');
 
@@ -41,41 +40,6 @@ function authenticate(authService) {
   };
 }
 
-function buildLoginRateLimiter(securityAuditService) {
-  const windowMs = Number(process.env.LOGIN_RATE_LIMIT_WINDOW_MS || 15 * 60 * 1000);
-  const buildLoginRateKey = req => {
-    const tenantId = (req.body && req.body.tenantId) || 'unknown-tenant';
-    const email = (req.body && req.body.email) || 'unknown-email';
-    const ip = req.ip || '';
-    return `${tenantId}::${String(email).toLowerCase()}::${ip}`;
-  };
-  return rateLimit({
-    windowMs,
-    max: Number(process.env.LOGIN_RATE_LIMIT_MAX_ATTEMPTS || 5),
-    standardHeaders: true,
-    legacyHeaders: false,
-    skipSuccessfulRequests: true,
-    keyGenerator: buildLoginRateKey,
-    handler: async (req, res) => {
-      const retryAfter = Math.ceil(windowMs / 1000);
-      await securityAuditService.log(SECURITY_EVENT_TYPES.LOGIN_LOCKOUT, {
-        tenantId: (req.body && req.body.tenantId) || 'unknown-tenant',
-        userId: (req.body && req.body.email) || null,
-        ipAddress: req.ip || '',
-        metadata: {
-          key: buildLoginRateKey(req),
-          retryAfter,
-        },
-      });
-      return res.status(429).json({
-        error: 'TOO_MANY_REQUESTS',
-        message: 'Too many failed login attempts. Try again later.',
-        retryAfter,
-      });
-    },
-  });
-}
-
 /**
  * errorHandler — converts AppError and unexpected errors to structured JSON.
  */
@@ -112,4 +76,4 @@ function errorHandler(err, req, res, next) {
   });
 }
 
-module.exports = { attachRequestId, authenticate, buildLoginRateLimiter, errorHandler };
+module.exports = { attachRequestId, authenticate, errorHandler };

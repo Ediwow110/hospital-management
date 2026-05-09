@@ -15,8 +15,11 @@
 
 const assert = require('assert');
 const { randomUUID } = require('crypto');
+const bcrypt = require('bcryptjs');
 
-const { AppContext } = require('../src/core/AppContext');
+// Test password and its bcrypt hash for auth fixtures
+const TEST_PASSWORD = 'password123';const { AppContext } = require('../src/core/AppContext');
+
 const { AppError, ERROR_CODES } = require('../src/core/AppError');
 const { PERMISSIONS, ROLE_PERMISSIONS } = require('../src/core/permissions');
 const { assertLabTransition } = require('../src/core/workflow');
@@ -103,12 +106,13 @@ const labService = new LabService({ labResultRepo, auditService });
 
 // Seed a test user (passwordHash = plaintext for demo per AuthService docs)
 const TEST_USER_ID = randomUUID();
+  const testPasswordHash = bcrypt.hashSync(TEST_PASSWORD, 10);
 userRepo._set(TEST_USER_ID, {
   id: TEST_USER_ID,
   tenantId: TENANT_ID,
   branchId: BRANCH_ID,
   email: 'admin@test.com',
-  passwordHash: 'password123',
+    passwordHash: testPasswordHash,
   name: 'Test Admin',
   roles: ['superadmin'],
   status: 'active',
@@ -135,7 +139,7 @@ userRepo._set(TEST_USER_ID, {
   await test('login with valid credentials returns token and user', async () => {
     const result = await authService.login(
       'admin@test.com',
-      'password123',
+      TEST_PASSWORD,
       TENANT_ID,
       '127.0.0.1',
       'test-runner'
@@ -156,9 +160,9 @@ userRepo._set(TEST_USER_ID, {
     assert.ok(threw, 'Expected error to be thrown');
   });
 
-  await test('decodeToken returns valid AppContext', async () => {
-    const { token } = await authService.login('admin@test.com', 'password123', TENANT_ID, '127.0.0.1');
-    const ctx = authService.decodeToken(token, randomUUID(), '127.0.0.1');
+  await test('verifyToken returns valid AppContext', async () => {
+    const { token } = await authService.login('admin@test.com', TEST_PASSWORD, TENANT_ID, '127.0.0.1');
+    const ctx = authService.verifyToken(token, randomUUID(), '127.0.0.1');
     assert.ok(ctx instanceof AppContext);
     assert.strictEqual(ctx.tenantId, TENANT_ID);
   });

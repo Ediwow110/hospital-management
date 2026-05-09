@@ -20,8 +20,7 @@ const bcrypt = require('bcryptjs');
 // Test password and its bcrypt hash for auth fixtures
 const TEST_PASSWORD = 'password123';
 // Pre-computed bcrypt hash of 'password123' (bcrypt.hashSync('password123', 10))
-const TEST_PASSWORD_HASH = '$2a$10$rS6fM3zGJvBXFZKh6H7Yx.OaQc3qW5kYL8dD8zk9KJzGQ7iZ8Y2fe';
-
+const TEST_PASSWORD_HASH = '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy';
 const { AppContext } = require('../src/core/AppContext');
 const { AppError, ERROR_CODES } = require('../src/core/AppError');
 const { PERMISSIONS, ROLE_PERMISSIONS } = require('../src/core/permissions');

@@ -15,6 +15,12 @@
 
 const assert = require('assert');
 const { randomUUID } = require('crypto');
+const bcrypt = require('bcryptjs');
+
+// Test password and its bcrypt hash for auth fixtures
+const TEST_PASSWORD = 'password123';
+// Pre-computed bcrypt hash of 'password123' (bcrypt.hashSync('password123', 10))
+const TEST_PASSWORD_HASH = '$2a$10$rS6fM3zGJvBXFZKh6H7Yx.OaQc3qW5kYL8dD8zk9KJzGQ7iZ8Y2fe';
 
 const { AppContext } = require('../src/core/AppContext');
 const { AppError, ERROR_CODES } = require('../src/core/AppError');
@@ -108,7 +114,7 @@ userRepo._set(TEST_USER_ID, {
   tenantId: TENANT_ID,
   branchId: BRANCH_ID,
   email: 'admin@test.com',
-  passwordHash: 'password123',
+    passwordHash: TEST_PASSWORD_HASH,
   name: 'Test Admin',
   roles: ['superadmin'],
   status: 'active',
@@ -135,7 +141,7 @@ userRepo._set(TEST_USER_ID, {
   await test('login with valid credentials returns token and user', async () => {
     const result = await authService.login(
       'admin@test.com',
-      'password123',
+      'TEST_PASSWORD',
       TENANT_ID,
       '127.0.0.1',
       'test-runner'

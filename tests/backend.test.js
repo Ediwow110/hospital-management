@@ -19,8 +19,6 @@ const bcrypt = require('bcryptjs');
 
 // Test password and its bcrypt hash for auth fixtures
 const TEST_PASSWORD = 'password123';
-// Pre-computed bcrypt hash of 'password123' (bcrypt.hashSync('password123', 10))
-const TEST_PASSWORD_HASH = '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy';
 const { AppContext } = require('../src/core/AppContext');
 const { AppError, ERROR_CODES } = require('../src/core/AppError');
 const { PERMISSIONS, ROLE_PERMISSIONS } = require('../src/core/permissions');
@@ -108,12 +106,15 @@ const labService = new LabService({ labResultRepo, auditService });
 
 // Seed a test user (passwordHash = plaintext for demo per AuthService docs)
 const TEST_USER_ID = randomUUID();
+  // Generate bcrypt hash for test password
+  const testPasswordHash = await bcrypt.hash(TEST_PASSWORD, 10);
+
 userRepo._set(TEST_USER_ID, {
   id: TEST_USER_ID,
   tenantId: TENANT_ID,
   branchId: BRANCH_ID,
   email: 'admin@test.com',
-    passwordHash: TEST_PASSWORD_HASH,
+    passwordHash: testPasswordHash,
   name: 'Test Admin',
   roles: ['superadmin'],
   status: 'active',

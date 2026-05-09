@@ -15,6 +15,7 @@ Executable backend foundation:
 
 - `src/api/router.js`: dependency-free route adapter that maps production routes to service methods and enforces authentication plus idempotency headers.
 - `src/api/server.js`: local HTTP server for API smoke testing.
+- `src/core/passwords.js`: password hashing and verification helper; executable demo users store hashes only, and API responses never return password hashes.
 - `src/services/hms-service.js`: service-layer workflows for patient registration, ordering, billing, LIS, inventory, reports, health, approvals, notification queuing, and audit logging.
 - `src/infrastructure/in-memory-store.js`: development repository adapter. Production should replace this with transactional PostgreSQL repositories while preserving service contracts.
 - `.github/workflows/ci.yml`: syntax and production test checks for pushes and pull requests.

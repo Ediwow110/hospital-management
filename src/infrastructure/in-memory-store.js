@@ -1,3 +1,16 @@
+const { hashPassword } = require('../core/passwords');
+
+const DEMO_PASSWORD = 'HmsDemo2026!';
+const DEMO_PASSWORD_HASHES = Object.freeze({
+  admin: hashPassword(DEMO_PASSWORD, { salt: 'hms-demo-admin-2026' }),
+  reception: hashPassword(DEMO_PASSWORD, { salt: 'hms-demo-reception-2026' }),
+  cashier: hashPassword(DEMO_PASSWORD, { salt: 'hms-demo-cashier-2026' }),
+  cashierB: hashPassword(DEMO_PASSWORD, { salt: 'hms-demo-cashier-b-2026' }),
+  medTech: hashPassword(DEMO_PASSWORD, { salt: 'hms-demo-medtech-2026' }),
+  pathologist: hashPassword(DEMO_PASSWORD, { salt: 'hms-demo-pathologist-2026' }),
+  manager: hashPassword(DEMO_PASSWORD, { salt: 'hms-demo-manager-2026' })
+});
+
 function createInMemoryStore() {
   return {
     tenant: {
@@ -14,13 +27,13 @@ function createInMemoryStore() {
       ]
     },
     users: [
-      { id: 'u-admin', email: 'admin@hospital.local', password: 'HmsDemo2026!', role: 'super_admin', tenantId: 'tenant-demo', branchIds: ['branch-main'], branchScope: 'all', mfaRequired: true, status: 'active' },
-      { id: 'u-reception', email: 'reception@hospital.local', password: 'HmsDemo2026!', role: 'receptionist', tenantId: 'tenant-demo', branchIds: ['branch-main'], mfaRequired: false, status: 'active' },
-      { id: 'u-cashier', email: 'cashier@hospital.local', password: 'HmsDemo2026!', role: 'cashier', tenantId: 'tenant-demo', branchIds: ['branch-main'], mfaRequired: true, status: 'active' },
-      { id: 'u-cashier-b', email: 'cashier.b@hospital.local', password: 'HmsDemo2026!', role: 'cashier', tenantId: 'tenant-demo', branchIds: ['branch-main'], mfaRequired: true, status: 'active' },
-      { id: 'u-medtech', email: 'medtech@hospital.local', password: 'HmsDemo2026!', role: 'med_tech', tenantId: 'tenant-demo', branchIds: ['branch-main'], mfaRequired: false, status: 'active' },
-      { id: 'u-pathologist', email: 'pathologist@hospital.local', password: 'HmsDemo2026!', role: 'pathologist', tenantId: 'tenant-demo', branchIds: ['branch-main'], mfaRequired: true, status: 'active' },
-      { id: 'u-manager', email: 'manager@hospital.local', password: 'HmsDemo2026!', role: 'manager', tenantId: 'tenant-demo', branchIds: ['branch-main'], mfaRequired: true, status: 'active' }
+      { id: 'u-admin', email: 'admin@hospital.local', passwordHash: DEMO_PASSWORD_HASHES.admin, role: 'super_admin', tenantId: 'tenant-demo', branchIds: ['branch-main'], branchScope: 'all', mfaRequired: true, status: 'active' },
+      { id: 'u-reception', email: 'reception@hospital.local', passwordHash: DEMO_PASSWORD_HASHES.reception, role: 'receptionist', tenantId: 'tenant-demo', branchIds: ['branch-main'], mfaRequired: false, status: 'active' },
+      { id: 'u-cashier', email: 'cashier@hospital.local', passwordHash: DEMO_PASSWORD_HASHES.cashier, role: 'cashier', tenantId: 'tenant-demo', branchIds: ['branch-main'], mfaRequired: true, status: 'active' },
+      { id: 'u-cashier-b', email: 'cashier.b@hospital.local', passwordHash: DEMO_PASSWORD_HASHES.cashierB, role: 'cashier', tenantId: 'tenant-demo', branchIds: ['branch-main'], mfaRequired: true, status: 'active' },
+      { id: 'u-medtech', email: 'medtech@hospital.local', passwordHash: DEMO_PASSWORD_HASHES.medTech, role: 'med_tech', tenantId: 'tenant-demo', branchIds: ['branch-main'], mfaRequired: false, status: 'active' },
+      { id: 'u-pathologist', email: 'pathologist@hospital.local', passwordHash: DEMO_PASSWORD_HASHES.pathologist, role: 'pathologist', tenantId: 'tenant-demo', branchIds: ['branch-main'], mfaRequired: true, status: 'active' },
+      { id: 'u-manager', email: 'manager@hospital.local', passwordHash: DEMO_PASSWORD_HASHES.manager, role: 'manager', tenantId: 'tenant-demo', branchIds: ['branch-main'], mfaRequired: true, status: 'active' }
     ],
     roles: [
       { id: 'role-receptionist', code: 'receptionist', tenantId: 'tenant-demo', branchId: 'branch-main', permissions: ['patient.view', 'patient.create', 'appointment.create', 'order.create', 'queue.manage'] },

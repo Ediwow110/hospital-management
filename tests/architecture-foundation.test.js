@@ -1,5 +1,6 @@
 const assert = require('assert');
 const { ERROR_CATALOG, AppError, toErrorResponse } = require('../src/core/app-error');
+const { hashPassword, isPasswordHash, verifyPassword } = require('../src/core/passwords');
 const { PERMISSIONS, PERMISSION_CODES } = require('../src/core/permissions');
 const { createInMemoryStore } = require('../src/infrastructure/in-memory-store');
 const { createInMemoryRepositories } = require('../src/repositories/in-memory-repositories');
@@ -44,8 +45,22 @@ function testRepositoryContracts() {
   Object.keys(REPOSITORY_INTERFACES).forEach(name => assert.ok(repositories[name], `${name} repository missing`));
 }
 
+function testPasswordHashing() {
+  const hash = hashPassword('VeryStrong2026!', { salt: 'architecture-test-salt' });
+  assert.ok(isPasswordHash(hash));
+  assert.strictEqual(verifyPassword('VeryStrong2026!', hash), true);
+  assert.strictEqual(verifyPassword('WrongStrong2026!', hash), false);
+
+  const store = createInMemoryStore();
+  store.users.forEach(user => {
+    assert.strictEqual(Object.prototype.hasOwnProperty.call(user, 'password'), false);
+    assert.ok(isPasswordHash(user.passwordHash), `${user.id} passwordHash is not a hash`);
+  });
+}
+
 testErrorCatalog();
 testPermissionConstants();
 testRepositoryContracts();
+testPasswordHashing();
 
 console.log('All architecture foundation tests passed.');

@@ -360,7 +360,7 @@ async function testScopedIdempotency() {
   store.users.push({
     id: 'u-reception-branch-b',
     email: 'branch.b@hospital.local',
-    password: 'HmsDemo2026!',
+    passwordHash: store.users.find(user => user.id === 'u-reception').passwordHash,
     role: 'receptionist',
     tenantId: 'tenant-demo',
     branchIds: ['branch-secondary'],
@@ -384,7 +384,7 @@ async function testScopedIdempotency() {
   store.users.push({
     id: 'u-reception-tenant-b',
     email: 'tenant.b@hospital.local',
-    password: 'HmsDemo2026!',
+    passwordHash: store.users.find(user => user.id === 'u-reception').passwordHash,
     role: 'receptionist',
     tenantId: 'tenant-other',
     branchIds: ['branch-main'],

@@ -5,7 +5,7 @@
   "description": "Production-oriented HMS prototype with API, workflow, permission, and audit guardrails.",
   "scripts": {
     "start:api": "node src/api/server.js",
-    "check": "node --check assets/js/app.js && node --check src/core/app-context.js && node --check src/core/app-error.js && node --check src/core/permissions.js && node --check src/core/production-rules.js && node --check src/repositories/interfaces.js && node --check src/repositories/in-memory-repositories.js && node --check src/services/hms-service.js && node --check src/api/router.js && node --check src/api/server.js && node --check tests/production-coverage.test.js && node --check tests/api-workflow.test.js && node --check tests/architecture-foundation.test.js",
+    "check": "node --check assets/js/app.js && node --check src/core/app-context.js && node --check src/core/app-error.js && node --check src/core/passwords.js && node --check src/core/permissions.js && node --check src/core/production-rules.js && node --check src/repositories/interfaces.js && node --check src/repositories/in-memory-repositories.js && node --check src/services/hms-service.js && node --check src/api/router.js && node --check src/api/server.js && node --check tests/production-coverage.test.js && node --check tests/api-workflow.test.js && node --check tests/architecture-foundation.test.js",
     "test": "node tests/rules.test.js && node tests/production-rules.test.js && node tests/architecture-foundation.test.js && node tests/production-coverage.test.js && node tests/api-workflow.test.js"
   }
 }

@@ -13,6 +13,7 @@ const {
 } = require('../core/production-rules');
 const { fallbackContext, idempotencyCacheKey } = require('../core/app-context');
 const { AppError } = require('../core/app-error');
+const { verifyPassword } = require('../core/passwords');
 const { normalizeMoney, requireFields } = require('../core/validation');
 const { createInMemoryRepositories } = require('../repositories/in-memory-repositories');
 
@@ -27,7 +28,8 @@ class HmsService {
   authenticate({ email, password, mfaVerified = false, ipAddress = null, deviceInfo = null }) {
     requireFields({ email, password }, ['email', 'password']);
     const user = this.repositories.users.findActiveByEmail(email);
-    if (!user || user.password !== password) {
+    const passwordValid = user ? this.safeVerifyPassword(password, user.passwordHash) : false;
+    if (!user || !passwordValid) {
       this.audit({ user: user || this.systemUser(), module: 'auth', action: 'login.failed', recordType: 'user', recordId: email, reason: 'Invalid credentials', ipAddress, deviceInfo });
       throw new AppError('invalid_credentials', 'Invalid credentials', 401);
     }
@@ -72,6 +74,8 @@ class HmsService {
         id: this.nextId('user'),
         email: body.email,
         fullName: body.fullName,
+        passwordHash: null,
+        mustSetPassword: true,
         role: body.roleCodes[0],
         roleCodes: body.roleCodes,
         tenantId: user.tenantId,
@@ -898,6 +902,14 @@ class HmsService {
     return Number(amount.toFixed(2));
   }
 
+  safeVerifyPassword(password, passwordHash) {
+    try {
+      return verifyPassword(password, passwordHash);
+    } catch {
+      return false;
+    }
+  }
+
   nextNumber(type, prefix) {
     const nextValue = this.store.sequences[type]++;
     return buildNumber({ prefix, year: YEAR, nextValue });
@@ -919,7 +931,8 @@ class HmsService {
       email: user.email,
       role: user.role,
       tenantId: user.tenantId,
-      branchIds: user.branchIds
+      branchIds: user.branchIds,
+      mustSetPassword: Boolean(user.mustSetPassword)
     };
   }
 

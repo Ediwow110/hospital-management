@@ -13,7 +13,10 @@
     "migrate": "echo 'PR #4: PostgreSQL migrations not yet implemented. See migrations/README.md'"
   },
   "dependencies": {
+    "bcryptjs": "^2.4.3",
     "express": "^4.19.2",
+    "express-rate-limit": "^7.0.0",
+    "jsonwebtoken": "^9.0.2",
     "uuid": "^9.0.1"
   },
   "devDependencies": {},

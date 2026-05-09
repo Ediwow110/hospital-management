@@ -46,10 +46,6 @@ class AuthService {
 
     const user = await this._userRepo.findByEmail(email, demoCtx);
 
-        // Require branchId for all users (no 'system' fallback)
-    if (!user.branchId) {
-      throw new AppError(ERROR_CODES.VALIDATION_ERROR, 'User account missing required branchId');
-    }
 
     if (!user || !user.passwordHash) {
       // Security event: persisted outside any business transaction
@@ -81,13 +77,17 @@ class AuthService {
       throw new AppError(ERROR_CODES.PERMISSION_DENIED, 'Invalid credentials');
     }
 
+        // Require branchId for all users (no 'system' fallback)
+    if (!user.branchId) {
+      throw new AppError(ERROR_CODES.VALIDATION_ERROR, 'User account missing required branchId');
+    }
+
     // Generate JWT token
     const token = jwt.sign(
       {
         userId: user.id,
         tenantId,
 branchId: user.branchId,        roles: user.roles,
-        iat: Date.now(),
       },
       this._jwtSecret,
       { expiresIn: this._jwtExpiry }
@@ -130,7 +130,15 @@ branchId: user.branchId,        roles: user.roles,
     } catch (err) {
       throw new AppError(ERROR_CODES.PERMISSION_DENIED, 'Invalid or expired token');
     }
-  } 
+  }
+
+    /**
+   * Backward compatibility wrapper for verifyToken.
+   * @deprecated Use verifyToken instead
+   */
+  decodeToken(token, requestId, ipAddress) {
+    return this.verifyToken(token, requestId, ipAddress);
+  }
 
   /**
    * Logout (currently no server-side revocation).

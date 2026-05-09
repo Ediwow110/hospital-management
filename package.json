@@ -1,11 +1,16 @@
 {
   "name": "hospital-management",
-  "version": "0.2.0",
+  "version": "0.4.0",
   "private": true,
-  "description": "Production-grade backend foundation for HMS with API, workflow, permission, and audit guardrails. PostgreSQL persistence follows in PR #4.",
+  "description": "PR #4 — PostgreSQL Persistence Foundation. Extends the production-grade backend from PR #3. Not production-ready.",
+  "dependencies": {
+    "pg": "^8.11.3"
+  },
   "scripts": {
     "start:api": "node src/api/server.js",
-    "check": "node --check assets/js/app.js && node --check src/core/app-context.js && node --check src/core/app-error.js && node --check src/core/passwords.js && node --check src/core/permissions.js && node --check src/core/production-rules.js && node --check src/repositories/interfaces.js && node --check src/repositories/in-memory-repositories.js && node --check src/services/hms-service.js && node --check src/api/router.js && node --check src/api/server.js && node --check tests/production-coverage.test.js && node --check tests/api-workflow.test.js && node --check tests/architecture-foundation.test.js",
-    "test": "node tests/rules.test.js && node tests/production-rules.test.js && node tests/architecture-foundation.test.js && node tests/production-coverage.test.js && node tests/api-workflow.test.js"
+    "migrate": "node src/infrastructure/migrate.js",
+    "check": "node --check src/core/AppContext.js && node --check src/core/AppError.js && node --check src/core/permissions.js && node --check src/core/workflow.js && node --check src/repositories/memory/InMemoryUserRepository.js && node --check src/repositories/memory/InMemoryAuditLogRepository.js && node --check src/repositories/memory/InMemoryPatientRepository.js && node --check src/repositories/memory/InMemoryOrderRepository.js && node --check src/repositories/memory/InMemoryInvoiceRepository.js && node --check src/repositories/memory/InMemoryPaymentRepository.js && node --check src/repositories/memory/InMemoryCashierSessionRepository.js && node --check src/repositories/memory/InMemoryLabResultRepository.js && node --check src/repositories/pg/PgUserRepository.js && node --check src/repositories/pg/PgAuditLogRepository.js && node --check src/repositories/pg/PgLabResultRepository.js && node --check src/infrastructure/db-pool.js && node --check src/infrastructure/transaction.js && node --check src/infrastructure/migrate.js && node --check src/services/AuditService.js && node --check src/services/AuthService.js && node --check src/services/HealthService.js && node --check src/services/PatientService.js && node --check src/services/OrderService.js && node --check src/services/BillingService.js && node --check src/services/LabService.js && node --check tests/backend.test.js && node --check tests/integration.test.js",
+    "test": "node tests/backend.test.js",
+    "test:integration": "node tests/integration.test.js"
   }
 }

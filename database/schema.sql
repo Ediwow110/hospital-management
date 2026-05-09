@@ -991,3 +991,723 @@ CREATE INDEX idx_employees_status ON employees (employment_status);
 CREATE INDEX idx_license_records_expiry ON license_records (expires_on);
 CREATE INDEX idx_notification_logs_status ON notification_logs (status);
 CREATE INDEX idx_backup_jobs_status ON backup_jobs (status);
+
+-- Strong production-level additions from the May 08, 2026 production plan.
+-- These tables make tenant isolation, feature packaging, API handoff, imports,
+-- background jobs, reporting, templates, and missing clinical operations explicit.
+
+CREATE TABLE tenants (
+    id BIGSERIAL PRIMARY KEY,
+    uuid UUID NOT NULL DEFAULT gen_random_uuid() UNIQUE,
+    code VARCHAR(80) NOT NULL UNIQUE,
+    name VARCHAR(180) NOT NULL,
+    status VARCHAR(32) NOT NULL DEFAULT 'active',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    deleted_at TIMESTAMPTZ
+);
+
+ALTER TABLE branches
+    ADD COLUMN tenant_id BIGINT REFERENCES tenants(id);
+
+ALTER TABLE users
+    ADD COLUMN tenant_id BIGINT REFERENCES tenants(id);
+
+ALTER TABLE audit_logs
+    ADD COLUMN tenant_id BIGINT REFERENCES tenants(id);
+
+ALTER TABLE approval_requests
+    ADD COLUMN tenant_id BIGINT REFERENCES tenants(id);
+
+CREATE TABLE subscription_plans (
+    id BIGSERIAL PRIMARY KEY,
+    uuid UUID NOT NULL DEFAULT gen_random_uuid() UNIQUE,
+    code VARCHAR(80) NOT NULL UNIQUE,
+    name VARCHAR(180) NOT NULL,
+    description TEXT,
+    status VARCHAR(32) NOT NULL DEFAULT 'active',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE tenant_subscriptions (
+    id BIGSERIAL PRIMARY KEY,
+    uuid UUID NOT NULL DEFAULT gen_random_uuid() UNIQUE,
+    tenant_id BIGINT NOT NULL REFERENCES tenants(id),
+    subscription_plan_id BIGINT NOT NULL REFERENCES subscription_plans(id),
+    status VARCHAR(32) NOT NULL DEFAULT 'active',
+    starts_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    ends_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (tenant_id, subscription_plan_id)
+);
+
+CREATE TABLE feature_flags (
+    id BIGSERIAL PRIMARY KEY,
+    code VARCHAR(80) NOT NULL UNIQUE,
+    name VARCHAR(180) NOT NULL,
+    description TEXT,
+    status VARCHAR(32) NOT NULL DEFAULT 'active'
+);
+
+CREATE TABLE tenant_feature_flags (
+    tenant_id BIGINT NOT NULL REFERENCES tenants(id),
+    feature_code VARCHAR(80) NOT NULL REFERENCES feature_flags(code),
+    enabled BOOLEAN NOT NULL DEFAULT false,
+    updated_by BIGINT REFERENCES users(id),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (tenant_id, feature_code)
+);
+
+CREATE TABLE patient_emergency_contacts (
+    id BIGSERIAL PRIMARY KEY,
+    uuid UUID NOT NULL DEFAULT gen_random_uuid() UNIQUE,
+    patient_id BIGINT NOT NULL REFERENCES patients(id),
+    full_name VARCHAR(180) NOT NULL,
+    relationship VARCHAR(80) NOT NULL,
+    mobile VARCHAR(40) NOT NULL,
+    email VARCHAR(255),
+    address TEXT,
+    is_primary BOOLEAN NOT NULL DEFAULT false,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE patient_dependents (
+    id BIGSERIAL PRIMARY KEY,
+    uuid UUID NOT NULL DEFAULT gen_random_uuid() UNIQUE,
+    patient_id BIGINT NOT NULL REFERENCES patients(id),
+    dependent_patient_id BIGINT NOT NULL REFERENCES patients(id),
+    relationship VARCHAR(80) NOT NULL,
+    authorization_status VARCHAR(32) NOT NULL DEFAULT 'active',
+    authorized_by BIGINT REFERENCES users(id),
+    authorized_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CHECK (patient_id IS DISTINCT FROM dependent_patient_id)
+);
+
+CREATE TABLE patient_timeline_events (
+    id BIGSERIAL PRIMARY KEY,
+    uuid UUID NOT NULL DEFAULT gen_random_uuid() UNIQUE,
+    patient_id BIGINT NOT NULL REFERENCES patients(id),
+    event_type VARCHAR(80) NOT NULL,
+    event_title VARCHAR(180) NOT NULL,
+    event_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    source_type VARCHAR(80),
+    source_id VARCHAR(120),
+    created_by BIGINT REFERENCES users(id),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE patient_merge_requests (
+    id BIGSERIAL PRIMARY KEY,
+    uuid UUID NOT NULL DEFAULT gen_random_uuid() UNIQUE,
+    source_patient_id BIGINT NOT NULL REFERENCES patients(id),
+    target_patient_id BIGINT NOT NULL REFERENCES patients(id),
+    status VARCHAR(32) NOT NULL DEFAULT 'submitted',
+    reason TEXT NOT NULL,
+    requested_by BIGINT NOT NULL REFERENCES users(id),
+    approved_by BIGINT REFERENCES users(id),
+    approved_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CHECK (source_patient_id IS DISTINCT FROM target_patient_id),
+    CHECK (requested_by IS DISTINCT FROM approved_by)
+);
+
+CREATE TABLE appointment_services (
+    id BIGSERIAL PRIMARY KEY,
+    appointment_id BIGINT NOT NULL REFERENCES appointments(id) ON DELETE CASCADE,
+    service_id BIGINT NOT NULL REFERENCES services(id),
+    service_name VARCHAR(180) NOT NULL,
+    service_version INTEGER NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE queue_events (
+    id BIGSERIAL PRIMARY KEY,
+    uuid UUID NOT NULL DEFAULT gen_random_uuid() UNIQUE,
+    queue_ticket_id BIGINT NOT NULL REFERENCES queue_tickets(id),
+    event_type VARCHAR(80) NOT NULL,
+    station VARCHAR(80),
+    old_status VARCHAR(32),
+    new_status VARCHAR(32),
+    event_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    created_by BIGINT REFERENCES users(id),
+    reason TEXT
+);
+
+CREATE TABLE doctor_schedules (
+    id BIGSERIAL PRIMARY KEY,
+    uuid UUID NOT NULL DEFAULT gen_random_uuid() UNIQUE,
+    branch_id BIGINT NOT NULL REFERENCES branches(id),
+    doctor_id BIGINT NOT NULL REFERENCES users(id),
+    department_id BIGINT REFERENCES departments(id),
+    day_of_week SMALLINT NOT NULL CHECK (day_of_week BETWEEN 0 AND 6),
+    starts_at TIME NOT NULL,
+    ends_at TIME NOT NULL,
+    status VARCHAR(32) NOT NULL DEFAULT 'active',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE department_schedules (
+    id BIGSERIAL PRIMARY KEY,
+    uuid UUID NOT NULL DEFAULT gen_random_uuid() UNIQUE,
+    branch_id BIGINT NOT NULL REFERENCES branches(id),
+    department_id BIGINT NOT NULL REFERENCES departments(id),
+    day_of_week SMALLINT NOT NULL CHECK (day_of_week BETWEEN 0 AND 6),
+    starts_at TIME NOT NULL,
+    ends_at TIME NOT NULL,
+    status VARCHAR(32) NOT NULL DEFAULT 'active',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE operating_hours (
+    id BIGSERIAL PRIMARY KEY,
+    branch_id BIGINT NOT NULL REFERENCES branches(id),
+    day_of_week SMALLINT NOT NULL CHECK (day_of_week BETWEEN 0 AND 6),
+    opens_at TIME NOT NULL,
+    closes_at TIME NOT NULL,
+    is_closed BOOLEAN NOT NULL DEFAULT false,
+    UNIQUE (branch_id, day_of_week)
+);
+
+CREATE TABLE holidays (
+    id BIGSERIAL PRIMARY KEY,
+    branch_id BIGINT REFERENCES branches(id),
+    holiday_date DATE NOT NULL,
+    name VARCHAR(180) NOT NULL,
+    is_closed BOOLEAN NOT NULL DEFAULT true,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (branch_id, holiday_date)
+);
+
+CREATE TABLE medical_certificates (
+    id BIGSERIAL PRIMARY KEY,
+    uuid UUID NOT NULL DEFAULT gen_random_uuid() UNIQUE,
+    encounter_id BIGINT NOT NULL REFERENCES encounters(id),
+    certificate_no VARCHAR(32) NOT NULL UNIQUE,
+    status VARCHAR(32) NOT NULL DEFAULT 'draft',
+    template_version INTEGER NOT NULL DEFAULT 1,
+    content TEXT NOT NULL,
+    issued_by BIGINT REFERENCES users(id),
+    issued_at TIMESTAMPTZ,
+    is_locked BOOLEAN NOT NULL DEFAULT false,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE clinical_attachments (
+    id BIGSERIAL PRIMARY KEY,
+    uuid UUID NOT NULL DEFAULT gen_random_uuid() UNIQUE,
+    encounter_id BIGINT NOT NULL REFERENCES encounters(id),
+    file_id BIGINT NOT NULL REFERENCES files(id),
+    attachment_type VARCHAR(80) NOT NULL,
+    status VARCHAR(32) NOT NULL DEFAULT 'active',
+    created_by BIGINT REFERENCES users(id),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE lab_order_items (
+    id BIGSERIAL PRIMARY KEY,
+    uuid UUID NOT NULL DEFAULT gen_random_uuid() UNIQUE,
+    lab_order_id BIGINT NOT NULL REFERENCES lab_orders(id),
+    service_id BIGINT REFERENCES services(id),
+    test_code VARCHAR(80) NOT NULL,
+    test_name VARCHAR(180) NOT NULL,
+    status VARCHAR(32) NOT NULL DEFAULT 'pending_collection',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE specimen_events (
+    id BIGSERIAL PRIMARY KEY,
+    uuid UUID NOT NULL DEFAULT gen_random_uuid() UNIQUE,
+    specimen_id BIGINT NOT NULL REFERENCES specimens(id),
+    event_type VARCHAR(80) NOT NULL,
+    old_status VARCHAR(32),
+    new_status VARCHAR(32),
+    event_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    created_by BIGINT REFERENCES users(id),
+    reason TEXT
+);
+
+CREATE TABLE lab_result_versions (
+    id BIGSERIAL PRIMARY KEY,
+    uuid UUID NOT NULL DEFAULT gen_random_uuid() UNIQUE,
+    lab_result_id BIGINT NOT NULL REFERENCES lab_results(id),
+    version INTEGER NOT NULL,
+    status VARCHAR(32) NOT NULL,
+    snapshot JSONB NOT NULL,
+    reason TEXT,
+    created_by BIGINT REFERENCES users(id),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (lab_result_id, version)
+);
+
+CREATE TABLE lab_templates (
+    id BIGSERIAL PRIMARY KEY,
+    uuid UUID NOT NULL DEFAULT gen_random_uuid() UNIQUE,
+    template_code VARCHAR(80) NOT NULL,
+    name VARCHAR(180) NOT NULL,
+    version INTEGER NOT NULL DEFAULT 1,
+    status VARCHAR(32) NOT NULL DEFAULT 'active',
+    created_by BIGINT REFERENCES users(id),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (template_code, version)
+);
+
+CREATE TABLE lab_template_items (
+    id BIGSERIAL PRIMARY KEY,
+    lab_template_id BIGINT NOT NULL REFERENCES lab_templates(id) ON DELETE CASCADE,
+    analyte VARCHAR(120) NOT NULL,
+    unit VARCHAR(60),
+    reference_range VARCHAR(120),
+    display_order INTEGER NOT NULL DEFAULT 0,
+    critical_low NUMERIC(12,4),
+    critical_high NUMERIC(12,4),
+    UNIQUE (lab_template_id, analyte)
+);
+
+CREATE TABLE critical_result_logs (
+    id BIGSERIAL PRIMARY KEY,
+    uuid UUID NOT NULL DEFAULT gen_random_uuid() UNIQUE,
+    lab_result_item_id BIGINT NOT NULL REFERENCES lab_result_items(id),
+    status VARCHAR(32) NOT NULL DEFAULT 'open',
+    notified_user_id BIGINT REFERENCES users(id),
+    acknowledged_by BIGINT REFERENCES users(id),
+    acknowledged_at TIMESTAMPTZ,
+    who_was_informed TEXT,
+    action_taken TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE qc_logs (
+    id BIGSERIAL PRIMARY KEY,
+    uuid UUID NOT NULL DEFAULT gen_random_uuid() UNIQUE,
+    branch_id BIGINT REFERENCES branches(id),
+    department_id BIGINT REFERENCES departments(id),
+    qc_type VARCHAR(80) NOT NULL,
+    status VARCHAR(32) NOT NULL DEFAULT 'passed',
+    details JSONB NOT NULL DEFAULT '{}'::jsonb,
+    performed_by BIGINT REFERENCES users(id),
+    performed_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE invoice_items (
+    id BIGSERIAL PRIMARY KEY,
+    uuid UUID NOT NULL DEFAULT gen_random_uuid() UNIQUE,
+    invoice_id BIGINT NOT NULL REFERENCES invoices(id),
+    order_item_id BIGINT REFERENCES order_items(id),
+    item_name VARCHAR(180) NOT NULL,
+    item_version INTEGER NOT NULL,
+    quantity NUMERIC(10,2) NOT NULL DEFAULT 1 CHECK (quantity > 0),
+    unit_price NUMERIC(12,2) NOT NULL CHECK (unit_price >= 0),
+    discount_amount NUMERIC(12,2) NOT NULL DEFAULT 0 CHECK (discount_amount >= 0),
+    line_total NUMERIC(12,2) GENERATED ALWAYS AS ((quantity * unit_price) - discount_amount) STORED,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE payment_methods (
+    id BIGSERIAL PRIMARY KEY,
+    code VARCHAR(80) NOT NULL UNIQUE,
+    name VARCHAR(120) NOT NULL,
+    requires_reference BOOLEAN NOT NULL DEFAULT false,
+    status VARCHAR(32) NOT NULL DEFAULT 'active'
+);
+
+CREATE TABLE payment_allocations (
+    id BIGSERIAL PRIMARY KEY,
+    uuid UUID NOT NULL DEFAULT gen_random_uuid() UNIQUE,
+    payment_id BIGINT NOT NULL REFERENCES payments(id),
+    invoice_id BIGINT NOT NULL REFERENCES invoices(id),
+    amount NUMERIC(12,2) NOT NULL CHECK (amount > 0),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (payment_id, invoice_id)
+);
+
+CREATE TABLE void_requests (
+    id BIGSERIAL PRIMARY KEY,
+    uuid UUID NOT NULL DEFAULT gen_random_uuid() UNIQUE,
+    module VARCHAR(80) NOT NULL,
+    record_type VARCHAR(120) NOT NULL,
+    record_id VARCHAR(120) NOT NULL,
+    status VARCHAR(32) NOT NULL DEFAULT 'submitted',
+    reason TEXT NOT NULL,
+    requested_by BIGINT NOT NULL REFERENCES users(id),
+    approved_by BIGINT REFERENCES users(id),
+    approved_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CHECK (requested_by IS DISTINCT FROM approved_by)
+);
+
+CREATE TABLE cashier_closing_reports (
+    id BIGSERIAL PRIMARY KEY,
+    uuid UUID NOT NULL DEFAULT gen_random_uuid() UNIQUE,
+    cashier_session_id BIGINT NOT NULL REFERENCES cashier_sessions(id),
+    report_no VARCHAR(32) NOT NULL UNIQUE,
+    cash_total NUMERIC(12,2) NOT NULL DEFAULT 0,
+    ewallet_total NUMERIC(12,2) NOT NULL DEFAULT 0,
+    bank_total NUMERIC(12,2) NOT NULL DEFAULT 0,
+    card_total NUMERIC(12,2) NOT NULL DEFAULT 0,
+    refunds_total NUMERIC(12,2) NOT NULL DEFAULT 0,
+    voids_total NUMERIC(12,2) NOT NULL DEFAULT 0,
+    expected_cash NUMERIC(12,2) NOT NULL DEFAULT 0,
+    actual_cash NUMERIC(12,2) NOT NULL DEFAULT 0,
+    short_over NUMERIC(12,2) NOT NULL DEFAULT 0,
+    generated_by BIGINT REFERENCES users(id),
+    generated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE accounts_receivable (
+    id BIGSERIAL PRIMARY KEY,
+    uuid UUID NOT NULL DEFAULT gen_random_uuid() UNIQUE,
+    invoice_id BIGINT NOT NULL REFERENCES invoices(id),
+    account_type VARCHAR(80) NOT NULL,
+    account_name VARCHAR(180) NOT NULL,
+    status VARCHAR(32) NOT NULL DEFAULT 'open',
+    amount_due NUMERIC(12,2) NOT NULL CHECK (amount_due >= 0),
+    due_date DATE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE inventory_categories (
+    id BIGSERIAL PRIMARY KEY,
+    uuid UUID NOT NULL DEFAULT gen_random_uuid() UNIQUE,
+    code VARCHAR(80) NOT NULL UNIQUE,
+    name VARCHAR(180) NOT NULL,
+    requires_expiry BOOLEAN NOT NULL DEFAULT false,
+    status VARCHAR(32) NOT NULL DEFAULT 'active'
+);
+
+CREATE TABLE stock_adjustments (
+    id BIGSERIAL PRIMARY KEY,
+    uuid UUID NOT NULL DEFAULT gen_random_uuid() UNIQUE,
+    stock_batch_id BIGINT REFERENCES stock_batches(id),
+    inventory_item_id BIGINT NOT NULL REFERENCES inventory_items(id),
+    adjustment_type VARCHAR(80) NOT NULL,
+    quantity NUMERIC(12,2) NOT NULL,
+    reason TEXT NOT NULL,
+    status VARCHAR(32) NOT NULL DEFAULT 'submitted',
+    requested_by BIGINT NOT NULL REFERENCES users(id),
+    approved_by BIGINT REFERENCES users(id),
+    approved_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CHECK (requested_by IS DISTINCT FROM approved_by)
+);
+
+CREATE TABLE purchase_order_items (
+    id BIGSERIAL PRIMARY KEY,
+    uuid UUID NOT NULL DEFAULT gen_random_uuid() UNIQUE,
+    purchase_order_id BIGINT NOT NULL REFERENCES purchase_orders(id) ON DELETE CASCADE,
+    inventory_item_id BIGINT NOT NULL REFERENCES inventory_items(id),
+    quantity NUMERIC(12,2) NOT NULL CHECK (quantity > 0),
+    unit_cost NUMERIC(12,2) NOT NULL CHECK (unit_cost >= 0),
+    line_total NUMERIC(12,2) GENERATED ALWAYS AS (quantity * unit_cost) STORED
+);
+
+CREATE TABLE physical_counts (
+    id BIGSERIAL PRIMARY KEY,
+    uuid UUID NOT NULL DEFAULT gen_random_uuid() UNIQUE,
+    branch_id BIGINT NOT NULL REFERENCES branches(id),
+    count_no VARCHAR(32) NOT NULL UNIQUE,
+    status VARCHAR(32) NOT NULL DEFAULT 'draft',
+    counted_by BIGINT REFERENCES users(id),
+    reviewed_by BIGINT REFERENCES users(id),
+    variance_summary JSONB NOT NULL DEFAULT '{}'::jsonb,
+    counted_at TIMESTAMPTZ,
+    reviewed_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE employee_documents (
+    id BIGSERIAL PRIMARY KEY,
+    uuid UUID NOT NULL DEFAULT gen_random_uuid() UNIQUE,
+    employee_id BIGINT NOT NULL REFERENCES employees(id),
+    file_id BIGINT NOT NULL REFERENCES files(id),
+    document_type VARCHAR(80) NOT NULL,
+    expiry_date DATE,
+    status VARCHAR(32) NOT NULL DEFAULT 'active',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE leave_balances (
+    id BIGSERIAL PRIMARY KEY,
+    employee_id BIGINT NOT NULL REFERENCES employees(id),
+    leave_type VARCHAR(80) NOT NULL,
+    year INTEGER NOT NULL,
+    earned NUMERIC(8,2) NOT NULL DEFAULT 0,
+    used NUMERIC(8,2) NOT NULL DEFAULT 0,
+    remaining NUMERIC(8,2) GENERATED ALWAYS AS (earned - used) STORED,
+    UNIQUE (employee_id, leave_type, year)
+);
+
+CREATE TABLE hr_incidents (
+    id BIGSERIAL PRIMARY KEY,
+    uuid UUID NOT NULL DEFAULT gen_random_uuid() UNIQUE,
+    employee_id BIGINT NOT NULL REFERENCES employees(id),
+    incident_type VARCHAR(80) NOT NULL,
+    severity VARCHAR(40),
+    description TEXT NOT NULL,
+    status VARCHAR(32) NOT NULL DEFAULT 'open',
+    reported_by BIGINT REFERENCES users(id),
+    reported_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE payroll_exports (
+    id BIGSERIAL PRIMARY KEY,
+    uuid UUID NOT NULL DEFAULT gen_random_uuid() UNIQUE,
+    branch_id BIGINT REFERENCES branches(id),
+    export_no VARCHAR(32) NOT NULL UNIQUE,
+    period_start DATE NOT NULL,
+    period_end DATE NOT NULL,
+    status VARCHAR(32) NOT NULL DEFAULT 'generated',
+    file_id BIGINT REFERENCES files(id),
+    generated_by BIGINT REFERENCES users(id),
+    generated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE report_exports (
+    id BIGSERIAL PRIMARY KEY,
+    uuid UUID NOT NULL DEFAULT gen_random_uuid() UNIQUE,
+    report_id BIGINT REFERENCES reports(id),
+    branch_id BIGINT REFERENCES branches(id),
+    export_format VARCHAR(20) NOT NULL,
+    filters JSONB NOT NULL DEFAULT '{}'::jsonb,
+    status VARCHAR(32) NOT NULL DEFAULT 'queued',
+    file_id BIGINT REFERENCES files(id),
+    requested_by BIGINT NOT NULL REFERENCES users(id),
+    requested_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    completed_at TIMESTAMPTZ
+);
+
+CREATE TABLE saved_report_filters (
+    id BIGSERIAL PRIMARY KEY,
+    uuid UUID NOT NULL DEFAULT gen_random_uuid() UNIQUE,
+    report_id BIGINT NOT NULL REFERENCES reports(id),
+    user_id BIGINT NOT NULL REFERENCES users(id),
+    name VARCHAR(180) NOT NULL,
+    filters JSONB NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE print_templates (
+    id BIGSERIAL PRIMARY KEY,
+    uuid UUID NOT NULL DEFAULT gen_random_uuid() UNIQUE,
+    template_code VARCHAR(80) NOT NULL,
+    template_type VARCHAR(80) NOT NULL,
+    name VARCHAR(180) NOT NULL,
+    status VARCHAR(32) NOT NULL DEFAULT 'active',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (template_code)
+);
+
+CREATE TABLE template_versions (
+    id BIGSERIAL PRIMARY KEY,
+    uuid UUID NOT NULL DEFAULT gen_random_uuid() UNIQUE,
+    print_template_id BIGINT NOT NULL REFERENCES print_templates(id),
+    version INTEGER NOT NULL,
+    content TEXT NOT NULL,
+    status VARCHAR(32) NOT NULL DEFAULT 'active',
+    created_by BIGINT REFERENCES users(id),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (print_template_id, version)
+);
+
+CREATE TABLE generated_documents (
+    id BIGSERIAL PRIMARY KEY,
+    uuid UUID NOT NULL DEFAULT gen_random_uuid() UNIQUE,
+    template_version_id BIGINT NOT NULL REFERENCES template_versions(id),
+    owner_type VARCHAR(80) NOT NULL,
+    owner_id VARCHAR(120) NOT NULL,
+    file_id BIGINT REFERENCES files(id),
+    status VARCHAR(32) NOT NULL DEFAULT 'generated',
+    generated_by BIGINT REFERENCES users(id),
+    generated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE email_logs (
+    id BIGSERIAL PRIMARY KEY,
+    uuid UUID NOT NULL DEFAULT gen_random_uuid() UNIQUE,
+    notification_id BIGINT REFERENCES notifications(id),
+    provider VARCHAR(80) NOT NULL,
+    recipient_email VARCHAR(255) NOT NULL,
+    subject VARCHAR(180) NOT NULL,
+    status VARCHAR(32) NOT NULL,
+    provider_message_id VARCHAR(180),
+    error_message TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE sms_logs (
+    id BIGSERIAL PRIMARY KEY,
+    uuid UUID NOT NULL DEFAULT gen_random_uuid() UNIQUE,
+    notification_id BIGINT REFERENCES notifications(id),
+    provider VARCHAR(80) NOT NULL,
+    recipient_mobile VARCHAR(40) NOT NULL,
+    privacy_safe_body TEXT NOT NULL,
+    status VARCHAR(32) NOT NULL,
+    provider_message_id VARCHAR(180),
+    error_message TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE webhook_logs (
+    id BIGSERIAL PRIMARY KEY,
+    uuid UUID NOT NULL DEFAULT gen_random_uuid() UNIQUE,
+    integration_code VARCHAR(80) NOT NULL,
+    event_type VARCHAR(120) NOT NULL,
+    status VARCHAR(32) NOT NULL,
+    payload JSONB,
+    response_status INTEGER,
+    error_message TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE api_tokens (
+    id BIGSERIAL PRIMARY KEY,
+    uuid UUID NOT NULL DEFAULT gen_random_uuid() UNIQUE,
+    tenant_id BIGINT REFERENCES tenants(id),
+    name VARCHAR(180) NOT NULL,
+    token_hash TEXT NOT NULL,
+    scopes TEXT[] NOT NULL DEFAULT '{}',
+    status VARCHAR(32) NOT NULL DEFAULT 'active',
+    expires_at TIMESTAMPTZ,
+    created_by BIGINT REFERENCES users(id),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    revoked_at TIMESTAMPTZ
+);
+
+CREATE TABLE external_integrations (
+    id BIGSERIAL PRIMARY KEY,
+    uuid UUID NOT NULL DEFAULT gen_random_uuid() UNIQUE,
+    tenant_id BIGINT REFERENCES tenants(id),
+    integration_code VARCHAR(80) NOT NULL,
+    integration_type VARCHAR(80) NOT NULL,
+    status VARCHAR(32) NOT NULL DEFAULT 'active',
+    config JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_by BIGINT REFERENCES users(id),
+    updated_by BIGINT REFERENCES users(id),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (tenant_id, integration_code)
+);
+
+CREATE TABLE failed_jobs (
+    id BIGSERIAL PRIMARY KEY,
+    uuid UUID NOT NULL DEFAULT gen_random_uuid() UNIQUE,
+    queue_name VARCHAR(80) NOT NULL,
+    job_type VARCHAR(120) NOT NULL,
+    payload JSONB NOT NULL,
+    error_message TEXT NOT NULL,
+    attempts INTEGER NOT NULL DEFAULT 1,
+    failed_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    resolved_at TIMESTAMPTZ
+);
+
+CREATE TABLE system_health_logs (
+    id BIGSERIAL PRIMARY KEY,
+    uuid UUID NOT NULL DEFAULT gen_random_uuid() UNIQUE,
+    component VARCHAR(80) NOT NULL,
+    status VARCHAR(32) NOT NULL,
+    metric_value VARCHAR(120),
+    details JSONB NOT NULL DEFAULT '{}'::jsonb,
+    checked_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE radiology_orders (
+    id BIGSERIAL PRIMARY KEY,
+    uuid UUID NOT NULL DEFAULT gen_random_uuid() UNIQUE,
+    order_item_id BIGINT REFERENCES order_items(id),
+    radiology_no VARCHAR(32) NOT NULL UNIQUE,
+    status VARCHAR(32) NOT NULL DEFAULT 'scheduled',
+    scheduled_at TIMESTAMPTZ,
+    technician_id BIGINT REFERENCES users(id),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE radiology_reports (
+    id BIGSERIAL PRIMARY KEY,
+    uuid UUID NOT NULL DEFAULT gen_random_uuid() UNIQUE,
+    radiology_order_id BIGINT NOT NULL REFERENCES radiology_orders(id),
+    report_text TEXT NOT NULL,
+    impression TEXT,
+    status VARCHAR(32) NOT NULL DEFAULT 'draft',
+    file_id BIGINT REFERENCES files(id),
+    encoded_by BIGINT REFERENCES users(id),
+    approved_by BIGINT REFERENCES users(id),
+    approved_at TIMESTAMPTZ,
+    released_at TIMESTAMPTZ,
+    is_locked BOOLEAN NOT NULL DEFAULT false,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CHECK (encoded_by IS NULL OR encoded_by IS DISTINCT FROM approved_by)
+);
+
+CREATE TABLE pharmacy_medications (
+    id BIGSERIAL PRIMARY KEY,
+    uuid UUID NOT NULL DEFAULT gen_random_uuid() UNIQUE,
+    product_id BIGINT REFERENCES products(id),
+    generic_name VARCHAR(180) NOT NULL,
+    brand_name VARCHAR(180),
+    dosage_form VARCHAR(80) NOT NULL,
+    strength VARCHAR(80) NOT NULL,
+    status VARCHAR(32) NOT NULL DEFAULT 'active',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE pharmacy_dispenses (
+    id BIGSERIAL PRIMARY KEY,
+    uuid UUID NOT NULL DEFAULT gen_random_uuid() UNIQUE,
+    prescription_item_id BIGINT REFERENCES prescription_items(id),
+    medication_id BIGINT REFERENCES pharmacy_medications(id),
+    stock_batch_id BIGINT REFERENCES stock_batches(id),
+    quantity NUMERIC(12,2) NOT NULL CHECK (quantity > 0),
+    status VARCHAR(32) NOT NULL DEFAULT 'dispensed',
+    dispensed_by BIGINT REFERENCES users(id),
+    dispensed_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE referrers (
+    id BIGSERIAL PRIMARY KEY,
+    uuid UUID NOT NULL DEFAULT gen_random_uuid() UNIQUE,
+    branch_id BIGINT REFERENCES branches(id),
+    referrer_code VARCHAR(40) NOT NULL UNIQUE,
+    name VARCHAR(180) NOT NULL,
+    referrer_type VARCHAR(80) NOT NULL,
+    status VARCHAR(32) NOT NULL DEFAULT 'active',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE referral_transactions (
+    id BIGSERIAL PRIMARY KEY,
+    uuid UUID NOT NULL DEFAULT gen_random_uuid() UNIQUE,
+    referrer_id BIGINT NOT NULL REFERENCES referrers(id),
+    order_id BIGINT REFERENCES orders(id),
+    invoice_id BIGINT REFERENCES invoices(id),
+    rebate_amount NUMERIC(12,2) NOT NULL DEFAULT 0 CHECK (rebate_amount >= 0),
+    status VARCHAR(32) NOT NULL DEFAULT 'pending',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE referral_payouts (
+    id BIGSERIAL PRIMARY KEY,
+    uuid UUID NOT NULL DEFAULT gen_random_uuid() UNIQUE,
+    referrer_id BIGINT NOT NULL REFERENCES referrers(id),
+    payout_no VARCHAR(32) NOT NULL UNIQUE,
+    amount NUMERIC(12,2) NOT NULL CHECK (amount >= 0),
+    status VARCHAR(32) NOT NULL DEFAULT 'submitted',
+    requested_by BIGINT REFERENCES users(id),
+    approved_by BIGINT REFERENCES users(id),
+    approved_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CHECK (requested_by IS NULL OR requested_by IS DISTINCT FROM approved_by)
+);
+
+CREATE INDEX idx_branches_tenant ON branches (tenant_id);
+CREATE INDEX idx_users_tenant ON users (tenant_id);
+CREATE INDEX idx_patient_timeline_patient ON patient_timeline_events (patient_id, event_at);
+CREATE INDEX idx_queue_events_ticket ON queue_events (queue_ticket_id, event_at);
+CREATE INDEX idx_specimen_events_specimen ON specimen_events (specimen_id, event_at);
+CREATE INDEX idx_lab_result_versions_result ON lab_result_versions (lab_result_id, version);
+CREATE INDEX idx_report_exports_status ON report_exports (status);
+CREATE INDEX idx_failed_jobs_queue ON failed_jobs (queue_name, failed_at);
+CREATE INDEX idx_system_health_logs_component ON system_health_logs (component, checked_at);

@@ -55,10 +55,12 @@
         <button type="button" class="nav-link" data-screen="queue"><i class="bi bi-ticket-perforated"></i> Queue Monitor</button>
         <div class="nav-group">Finance</div>
         <button type="button" class="nav-link" data-screen="billing"><i class="bi bi-cash-coin"></i> Billing</button>
+        <button type="button" class="nav-link" data-screen="receipt"><i class="bi bi-receipt"></i> Receipt Preview</button>
         <button type="button" class="nav-link" data-screen="cashier"><i class="bi bi-safe2"></i> Cashier Closing</button>
         <button type="button" class="nav-link" data-screen="reports"><i class="bi bi-graph-up-arrow"></i> Reports</button>
         <div class="nav-group">Diagnostics</div>
         <button type="button" class="nav-link" data-screen="lab"><i class="bi bi-eyedropper"></i> Result Encoding</button>
+        <button type="button" class="nav-link" data-screen="lab-approval"><i class="bi bi-patch-check"></i> Result Approval</button>
         <button type="button" class="nav-link" data-screen="print"><i class="bi bi-printer"></i> Result Print Preview</button>
         <div class="nav-group">Resources</div>
         <button type="button" class="nav-link" data-screen="inventory"><i class="bi bi-box-seam"></i> Inventory</button>
@@ -174,6 +176,7 @@
             <button type="button" class="btn btn-primary" data-jump="orders"><i class="bi bi-plus-lg"></i> Create order</button>
           </div>
         </div>
+        <div class="patient-context" data-patient-header></div>
         <div class="patient-summary">
           <div><span>Patient ID</span><strong id="profile-id">P-2026-000001</strong></div>
           <div><span>Classification</span><strong id="profile-classification">Regular</strong></div>
@@ -191,6 +194,7 @@
           <div><p class="eyebrow">Orders</p><h2>Create order</h2></div>
           <span class="badge status-draft" id="order-status">Draft</span>
         </div>
+        <div class="patient-context" data-patient-header></div>
         <div class="content-grid two-col">
           <section class="panel">
             <div class="panel-head"><h3>Services and packages</h3><span class="badge text-bg-light">Price version locked on order</span></div>
@@ -213,6 +217,7 @@
           <div><p class="eyebrow">Billing & Cashier</p><h2>Billing/payment screen</h2></div>
           <span class="badge status-unpaid" id="invoice-status">Unpaid</span>
         </div>
+        <div class="patient-context" data-patient-header></div>
         <div class="content-grid two-col">
           <section class="panel">
             <h3>Invoice</h3>
@@ -225,6 +230,7 @@
             <div class="button-stack mt-3">
               <button type="button" class="btn btn-outline-danger w-100" data-action="requestVoid"><i class="bi bi-ban"></i> Request void</button>
               <button type="button" class="btn btn-outline-warning w-100" data-action="requestRefund"><i class="bi bi-arrow-counterclockwise"></i> Request refund</button>
+              <button type="button" class="btn btn-outline-primary w-100" data-action="printReceipt"><i class="bi bi-receipt"></i> Receipt preview</button>
             </div>
           </section>
           <section class="panel">
@@ -239,6 +245,23 @@
             </form>
           </section>
         </div>
+      </section>
+
+      <section class="screen" id="screen-receipt">
+        <div class="page-header">
+          <div><p class="eyebrow">Template & Print Engine</p><h2>Receipt print preview</h2></div>
+          <div class="header-actions">
+            <button type="button" class="btn btn-outline-secondary" data-jump="billing"><i class="bi bi-arrow-left"></i> Back to billing</button>
+            <button type="button" class="btn btn-primary" data-action="printReceiptDocument"><i class="bi bi-printer"></i> Print receipt</button>
+          </div>
+        </div>
+        <div class="patient-context" data-patient-header></div>
+        <article class="result-document receipt-document">
+          <header><div><strong>Hospital Management System</strong><span>Main Branch Cashier</span></div><div class="qr-box">OR</div></header>
+          <h3>Official Receipt</h3>
+          <div id="receipt-body"></div>
+          <footer>Receipt numbers are never reused. Print/download actions are audit logged.</footer>
+        </article>
       </section>
 
       <section class="screen" id="screen-cashier">
@@ -264,6 +287,7 @@
           <div><p class="eyebrow">Appointment & Queue</p><h2>Queue monitor</h2></div>
           <button type="button" class="btn btn-outline-secondary" data-action="printQueueTicket"><i class="bi bi-printer"></i> Print ticket</button>
         </div>
+        <div class="patient-context" data-patient-header></div>
         <div class="queue-board" id="queue-board"></div>
       </section>
 
@@ -272,6 +296,7 @@
           <div><p class="eyebrow">Laboratory Information System</p><h2>Lab result encoding</h2></div>
           <span class="badge status-processing" id="lab-status">Processing</span>
         </div>
+        <div class="patient-context" data-patient-header></div>
         <form class="panel" id="lab-form">
           <div class="lab-meta" id="lab-meta"></div>
           <div class="workflow-strip" id="lab-workflow"></div>
@@ -294,6 +319,29 @@
         </form>
       </section>
 
+      <section class="screen" id="screen-lab-approval">
+        <div class="page-header">
+          <div><p class="eyebrow">LIS Approval</p><h2>Result approval</h2></div>
+          <span class="badge status-processing" id="approval-lab-status">Processing</span>
+        </div>
+        <div class="patient-context" data-patient-header></div>
+        <div class="content-grid two-col">
+          <section class="panel">
+            <h3>Approval checklist</h3>
+            <div id="approval-checklist" class="settings-list"></div>
+          </section>
+          <section class="panel">
+            <h3>Controlled actions</h3>
+            <div class="button-stack">
+              <button type="button" class="btn btn-warning" data-action="validateResult"><i class="bi bi-shield-check"></i> Validate encoded result</button>
+              <button type="button" class="btn btn-success" data-action="approveResultAction"><i class="bi bi-patch-check"></i> Approve result</button>
+              <button type="button" class="btn btn-primary" data-action="releaseResult"><i class="bi bi-send-check"></i> Release result</button>
+              <button type="button" class="btn btn-outline-danger" data-action="requestAmendment"><i class="bi bi-pencil-square"></i> Request amendment</button>
+            </div>
+          </section>
+        </div>
+      </section>
+
       <section class="screen" id="screen-print">
         <div class="page-header">
           <div><p class="eyebrow">Document Management</p><h2>Result print preview</h2></div>
@@ -302,6 +350,7 @@
             <button type="button" class="btn btn-primary" data-action="printResult"><i class="bi bi-printer"></i> Print</button>
           </div>
         </div>
+        <div class="patient-context" data-patient-header></div>
         <article class="result-document" id="result-document">
           <header><div><strong>Hospital Management System</strong><span>Main Branch Laboratory</span></div><div class="qr-box">QR</div></header>
           <h3>Complete Blood Count</h3>
@@ -362,6 +411,7 @@
           <div><p class="eyebrow">Patient Portal</p><h2>Patient view</h2></div>
           <button type="button" class="btn btn-outline-secondary" data-action="sendOtp"><i class="bi bi-shield-lock"></i> Send OTP</button>
         </div>
+        <div class="patient-context" data-patient-header></div>
         <div class="content-grid two-col">
           <section class="panel"><h3>Own records only</h3><div id="portal-summary"></div></section>
           <section class="panel"><h3>Structured requests</h3><div class="button-stack"><button type="button" class="btn btn-outline-primary" data-action="portalRequestCopy">Request result copy</button><button type="button" class="btn btn-outline-primary" data-action="portalRequestReschedule">Request appointment reschedule</button><button type="button" class="btn btn-outline-primary" data-action="portalRequestCorrection">Request information correction</button></div></section>

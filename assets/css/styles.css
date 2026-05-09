@@ -417,6 +417,38 @@ textarea { font: inherit; }
   margin-bottom: 18px;
 }
 
+.patient-context {
+  display: grid;
+  grid-template-columns: 1.2fr repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.patient-context-item {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  min-width: 0;
+}
+
+.patient-context-item span {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  margin-bottom: 3px;
+}
+
+.patient-context-item strong {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.patient-context-alert {
+  border-color: #f59e0b;
+  background: #fffbeb;
+}
+
 .patient-summary div,
 .summary-tile,
 .backup-card {
@@ -592,6 +624,24 @@ textarea { font: inherit; }
   margin-top: 12px;
 }
 
+.receipt-document {
+  max-width: 720px;
+}
+
+.receipt-line {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 1px solid var(--border);
+  padding: 8px 0;
+}
+
+.receipt-line.total {
+  border-bottom: 0;
+  font-size: 18px;
+  font-weight: 800;
+}
+
 .exception-list {
   list-style: none;
   padding: 0;
@@ -664,7 +714,7 @@ textarea { font: inherit; }
   .toast-stack { display: none !important; }
   .app-shell { display: block; }
   .screen { display: none; padding: 0; }
-  #screen-print { display: block; }
+  .screen.active { display: block; }
   .result-document { box-shadow: none; border: 0; }
 }
 
@@ -674,6 +724,7 @@ textarea { font: inherit; }
   .topbar { flex-wrap: wrap; height: auto; padding: 12px; }
   .search-box { max-width: none; flex: 1 1 100%; }
   .metric-grid,
+  .patient-context,
   .patient-summary,
   .queue-board,
   .two-col { grid-template-columns: 1fr; }

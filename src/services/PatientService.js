@@ -46,9 +46,7 @@ class PatientService {
     };
 
     const saved = await this._repo.save(patient, context);
-
     await this._audit.record(context, 'patient.create', 'Patient', id, { mrn });
-
     return saved;
   }
 
@@ -66,17 +64,22 @@ class PatientService {
 
     const patient = await this._repo.findById(id, context);
     if (!patient) {
-      const raw = typeof this._repo._get === 'function' ? this._repo._get(id) : null;
-      if (raw && raw.tenantId !== context.tenantId && this._securityAudit) {
-        await this._securityAudit.log('CROSS_TENANT_ACCESS_ATTEMPT', {
-          tenantId: context.tenantId,
-          userId: context.userId,
-          payload: { patientId: id, targetTenantId: raw.tenantId },
-        });
+      // Use the safe unscoped method to detect cross-tenant attempts.
+      // This method returns ONLY { id, tenantId } — never PHI.
+      // It is not available in the Postgres adapter (PR #4 will add it);
+      // in that case we skip the detection safely.
+      if (this._securityAudit && typeof this._repo.findTenantIdByIdUnscopedForSecurityCheck === 'function') {
+        const meta = this._repo.findTenantIdByIdUnscopedForSecurityCheck(id);
+        if (meta && meta.tenantId !== context.tenantId) {
+          await this._securityAudit.log('CROSS_TENANT_ACCESS_ATTEMPT', {
+            tenantId: context.tenantId,
+            userId: context.userId,
+            payload: { patientId: id, targetTenantId: meta.tenantId },
+          });
+        }
       }
       throw new AppError(ERROR_CODES.NOT_FOUND, `Patient ${id} not found`);
     }
-
     return patient;
   }
 }

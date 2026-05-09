@@ -10,8 +10,17 @@
  *
  * Services must NEVER import pg directly. All DB access is here.
  * PR #4 — PostgreSQL Persistence Foundation.
+ *
+ * Coverage honesty:
+ *   - Dedicated Pg repository classes: PgUserRepository, PgAuditLogRepository, PgLabResultRepository
+ *   - Remaining namespaces (patients, orders, invoices, payments, cashierSessions, inventory,
+ *     approvals, notifications, idempotency, roles) are contract-compatible Pg stubs.
+ *   - Stubs require follow-up hardening (tenant_id scoping on all lookups, role_permissions
+ *     migration, full CRUD coverage) before production use.
+ *   - This file does NOT make the system production-ready.
  */
 
+const { AppError, ERROR_CODES } = require('../core/AppError');
 const { PgAuditLogRepository } = require('./pg/PgAuditLogRepository');
 const { PgLabResultRepository } = require('./pg/PgLabResultRepository');
 const { assertRepositoryInterfaces } = require('./interfaces');
@@ -23,21 +32,41 @@ function createPgRepositories(pool) {
   const repositories = {
     users: {
       /**
-       * Find an active user by email across all tenants.
-       * The auth service narrows to the correct tenant via tenantId login param.
+       * Find an active user by email, scoped to context.tenantId.
+       *
+       * SECURITY: User lookup MUST be tenant-scoped in a multi-tenant healthcare system.
+       * Missing tenantId throws immediately — no silent fallback to cross-tenant lookup.
+       *
+       * @param {string} email
+       * @param {{ tenantId: string }} context
+       * @returns {Promise<object|null>}
        */
-      findActiveByEmail: async (email) => {
+      findActiveByEmail: async (email, context) => {
+        if (!context || !context.tenantId) {
+          throw new AppError(
+            ERROR_CODES.VALIDATION_ERROR,
+            'context.tenantId is required for user lookup'
+          );
+        }
         const { rows } = await pool.query(
-          `SELECT id, tenant_id AS "tenantId", branch_id AS "branchId",
-                  email, password_hash AS "passwordHash", name,
-                  roles, status
-           FROM users
-           WHERE email = $1 AND status = 'active'
-           LIMIT 1`,
-          [email]
+          `SELECT id,
+                  tenant_id        AS "tenantId",
+                  branch_id        AS "branchId",
+                  email,
+                  password_hash    AS "passwordHash",
+                  name,
+                  roles,
+                  status
+             FROM users
+            WHERE email     = $1
+              AND tenant_id = $2
+              AND status    = 'active'
+            LIMIT 1`,
+          [email, context.tenantId]
         );
         return rows[0] || null;
       },
+
       findActiveById: async (id) => {
         const { rows } = await pool.query(
           `SELECT id, tenant_id AS "tenantId", branch_id AS "branchId",
@@ -51,7 +80,12 @@ function createPgRepositories(pool) {
         return rows[0] || null;
       }
     },
+
     roles: {
+      /**
+       * TODO (follow-up hardening): confirm role_permissions table exists in migrations.
+       * Migration 002_access_users_roles.sql must include this table before production use.
+       */
       listRolePermissions: async (role) => {
         const { rows } = await pool.query(
           'SELECT permission FROM role_permissions WHERE role = $1',
@@ -60,7 +94,12 @@ function createPgRepositories(pool) {
         return rows.map(r => r.permission);
       }
     },
+
     patients: {
+      /**
+       * TODO (follow-up hardening): findByIdOrNumber lacks tenant_id scoping — cross-tenant
+       * patient data leak risk. Add tenant_id = $2 filter before production use.
+       */
       create: async (patient) => {
         const { rows } = await pool.query(
           `INSERT INTO patients
@@ -91,7 +130,11 @@ function createPgRepositories(pool) {
         return rows;
       }
     },
+
     orders: {
+      /**
+       * TODO (follow-up hardening): findByIdOrNumber lacks tenant_id scoping.
+       */
       create: async (order) => {
         const { rows } = await pool.query(
           `INSERT INTO orders
@@ -113,7 +156,11 @@ function createPgRepositories(pool) {
         return rows[0] || null;
       }
     },
+
     invoices: {
+      /**
+       * TODO (follow-up hardening): findByIdOrNumber lacks tenant_id scoping.
+       */
       create: async (invoice) => {
         const { rows } = await pool.query(
           `INSERT INTO invoices
@@ -137,6 +184,7 @@ function createPgRepositories(pool) {
         return rows[0] || null;
       }
     },
+
     payments: {
       create: async (payment) => {
         const { rows } = await pool.query(
@@ -159,7 +207,12 @@ function createPgRepositories(pool) {
         return rows;
       }
     },
+
     cashierSessions: {
+      /**
+       * TODO (follow-up hardening): findByIdOrNumber lacks tenant_id scoping.
+       * findActiveByCashier is correctly scoped by tenant_id + branch_id + cashier_id.
+       */
       create: async (session) => {
         const { rows } = await pool.query(
           `INSERT INTO cashier_sessions
@@ -191,6 +244,7 @@ function createPgRepositories(pool) {
         return rows[0] || null;
       }
     },
+
     lab: {
       createOrder: async (labOrder) => {
         const { rows } = await pool.query(
@@ -217,6 +271,7 @@ function createPgRepositories(pool) {
       },
       findResultByIdOrNumber: (id) => labRepo.findByIdOrNumber(id, { _tx: pool })
     },
+
     inventory: {
       findItemById: async (id) => {
         const { rows } = await pool.query(
@@ -237,10 +292,12 @@ function createPgRepositories(pool) {
         return rows[0];
       }
     },
+
     audit: {
       create: (event, context) => auditRepo.create(event, context || { _tx: pool }),
       searchByTenant: (tenantId, context) => auditRepo.searchByTenant(tenantId, context || { _tx: pool })
     },
+
     approvals: {
       create: async (approval) => {
         const { rows } = await pool.query(
@@ -263,6 +320,7 @@ function createPgRepositories(pool) {
         return rows[0] || null;
       }
     },
+
     notifications: {
       create: async (notification) => {
         const { rows } = await pool.query(
@@ -286,6 +344,7 @@ function createPgRepositories(pool) {
         return rows;
       }
     },
+
     idempotency: {
       get: async (key) => {
         const { rows } = await pool.query(

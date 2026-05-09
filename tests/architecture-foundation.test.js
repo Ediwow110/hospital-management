@@ -1,4 +1,6 @@
 const assert = require('assert');
+const fs = require('fs');
+const path = require('path');
 const { ERROR_CATALOG, AppError, toErrorResponse } = require('../src/core/app-error');
 const { hashPassword, isPasswordHash, verifyPassword } = require('../src/core/passwords');
 const { PERMISSIONS, PERMISSION_CODES } = require('../src/core/permissions');
@@ -58,9 +60,54 @@ function testPasswordHashing() {
   });
 }
 
+/**
+ * Architecture guardrail: service files must not import pg directly
+ * and must not contain raw SQL.
+ *
+ * SQL belongs in:
+ *   - migrations/
+ *   - src/infrastructure/
+ *   - src/repositories/
+ *   - tests/ (integration tests only, against real pg)
+ *
+ * Services are pure business logic; they receive repository interfaces via
+ * constructor injection and must never reach into the database layer.
+ */
+function testServiceLayerNoPgImports() {
+  const servicesDir = path.join(__dirname, '../src/services');
+  const serviceFiles = fs.readdirSync(servicesDir).filter(f => f.endsWith('.js'));
+
+  assert.ok(
+    serviceFiles.length > 0,
+    'src/services must contain at least one service file'
+  );
+
+  serviceFiles.forEach(file => {
+    const content = fs.readFileSync(path.join(servicesDir, file), 'utf8');
+
+    assert.ok(
+      !content.includes("require('pg')") && !content.includes('require("pg")'),
+      `ARCHITECTURE VIOLATION: ${file} must not import pg directly — ` +
+      'all DB access must go through repository interfaces'
+    );
+
+    // SQL keywords as standalone words (case-insensitive).
+    // This intentionally catches accidental raw SQL in service business logic.
+    // Comments in service files referencing SQL are acceptable and will not
+    // trigger this pattern unless they contain a bare keyword at a word boundary.
+    const sqlPattern = /\b(SELECT|INSERT|UPDATE|DELETE)\b/;
+    assert.ok(
+      !sqlPattern.test(content),
+      `ARCHITECTURE VIOLATION: ${file} must not contain raw SQL keywords — ` +
+      'SQL belongs in src/repositories/ or migrations/'
+    );
+  });
+}
+
 testErrorCatalog();
 testPermissionConstants();
 testRepositoryContracts();
 testPasswordHashing();
+testServiceLayerNoPgImports();
 
 console.log('All architecture foundation tests passed.');

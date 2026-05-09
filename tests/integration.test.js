@@ -12,6 +12,8 @@
  *   - withTransaction commits and rolls back correctly
  *   - audit_logs are immutable (DB trigger enforced)
  *   - Basic user CRUD via parameterized SQL
+ *   - Tenant-scoped user lookup isolation (cross-tenant collision prevention)
+ *   - Missing tenantId throws validation error — no silent cross-tenant fallback
  */
 
 const assert = require('assert');
@@ -21,6 +23,7 @@ const { withTransaction } = require('../src/infrastructure/transaction');
 const { PgUserRepository } = require('../src/repositories/pg/PgUserRepository');
 const { PgAuditLogRepository } = require('../src/repositories/pg/PgAuditLogRepository');
 const { PgLabResultRepository } = require('../src/repositories/pg/PgLabResultRepository');
+const { createPgRepositories } = require('../src/repositories/pg-repositories');
 
 const DATABASE_URL = process.env.DATABASE_URL;
 if (!DATABASE_URL) {
@@ -46,24 +49,31 @@ async function test(name, fn) {
   }
 }
 
+async function seedTenant(planId, label) {
+  var slug = label + '-' + randomUUID().slice(0, 8);
+  var tenantRes = await pool.query(
+    'INSERT INTO tenants (name, slug, plan_id) VALUES ($1, $2, $3) RETURNING id',
+    [label + ' Tenant', slug, planId]
+  );
+  var tenantId = tenantRes.rows[0].id;
+  var code = label.slice(0, 2).toUpperCase() + randomUUID().slice(0, 4).toUpperCase();
+  var branchRes = await pool.query(
+    'INSERT INTO branches (tenant_id, name, code) VALUES ($1, $2, $3) RETURNING id',
+    [tenantId, label + ' Branch', code]
+  );
+  var branchId = branchRes.rows[0].id;
+  return { tenantId: tenantId, branchId: branchId };
+}
+
 async function seedFixtures() {
   var planRes = await pool.query(
     'INSERT INTO plans (name, features) VALUES ($1, $2) ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name RETURNING id',
     ['integration-test-plan', '{}']
   );
   var planId = planRes.rows[0].id;
-  var slug = 'integration-' + randomUUID().slice(0, 8);
-  var tenantRes = await pool.query(
-    'INSERT INTO tenants (name, slug, plan_id) VALUES ($1, $2, $3) RETURNING id',
-    ['Integration Tenant', slug, planId]
-  );
-  var tenantId = tenantRes.rows[0].id;
-  var code = 'INTB' + randomUUID().slice(0, 4).toUpperCase();
-  var branchRes = await pool.query(
-    'INSERT INTO branches (tenant_id, name, code) VALUES ($1, $2, $3) RETURNING id',
-    [tenantId, 'Integration Branch', code]
-  );
-  var branchId = branchRes.rows[0].id;
+  var main = await seedTenant(planId, 'integration-main');
+  var tenantId = main.tenantId;
+  var branchId = main.branchId;
   var email = 'actor-' + randomUUID().slice(0, 8) + '@test.local';
   var userRes = await pool.query(
     'INSERT INTO users (tenant_id, branch_id, full_name, email, password_hash, role) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id',
@@ -88,6 +98,7 @@ async function runTests() {
   var tenantId = fixtures.tenantId;
   var branchId = fixtures.branchId;
   var userId = fixtures.userId;
+  var planId = fixtures.planId;
 
   console.log('--- Repository instantiation ---');
 
@@ -199,6 +210,107 @@ async function runTests() {
     }
     var res = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
     assert.strictEqual(res.rows.length, 0, 'rolled-back row must not exist');
+  });
+
+  // -----------------------------------------------------------------------
+  // Tenant-scoped user lookup isolation
+  // SECURITY: proves multi-tenant authentication cannot cross tenant boundaries.
+  // Same email existing in two tenants must never collide during lookup.
+  // -----------------------------------------------------------------------
+  console.log('--- Tenant-scoped user lookup isolation ---');
+
+  var tenantAInfo;
+  var tenantBInfo;
+  await test('Seed tenant A and tenant B with same email', async function() {
+    tenantAInfo = await seedTenant(planId, 'tenant-a-iso');
+    tenantBInfo = await seedTenant(planId, 'tenant-b-iso');
+
+    var sharedEmail = 'shared-' + randomUUID().slice(0, 8) + '@iso.test.local';
+    tenantAInfo.sharedEmail = sharedEmail;
+    tenantBInfo.sharedEmail = sharedEmail;
+
+    var resA = await pool.query(
+      'INSERT INTO users (tenant_id, branch_id, full_name, email, password_hash, role, status) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id',
+      [tenantAInfo.tenantId, tenantAInfo.branchId, 'User A', sharedEmail, '$2b$10$phA', 'nurse', 'active']
+    );
+    var resB = await pool.query(
+      'INSERT INTO users (tenant_id, branch_id, full_name, email, password_hash, role, status) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id',
+      [tenantBInfo.tenantId, tenantBInfo.branchId, 'User B', sharedEmail, '$2b$10$phB', 'doctor', 'active']
+    );
+    tenantAInfo.userId = resA.rows[0].id;
+    tenantBInfo.userId = resB.rows[0].id;
+
+    assert.ok(tenantAInfo.userId, 'tenant A user must be created');
+    assert.ok(tenantBInfo.userId, 'tenant B user must be created');
+    assert.notStrictEqual(tenantAInfo.userId, tenantBInfo.userId, 'tenant A and B users must have different IDs');
+  });
+
+  await test('Tenant A context returns only tenant A user', async function() {
+    var repos = createPgRepositories(pool);
+    var ctxA = { tenantId: tenantAInfo.tenantId };
+    var user = await repos.users.findActiveByEmail(tenantAInfo.sharedEmail, ctxA);
+    assert.ok(user, 'tenant A lookup must return a user');
+    assert.strictEqual(user.tenantId, tenantAInfo.tenantId, 'returned user must belong to tenant A');
+    assert.strictEqual(user.id, tenantAInfo.userId, 'returned user ID must match tenant A user');
+  });
+
+  await test('Tenant B context returns only tenant B user', async function() {
+    var repos = createPgRepositories(pool);
+    var ctxB = { tenantId: tenantBInfo.tenantId };
+    var user = await repos.users.findActiveByEmail(tenantBInfo.sharedEmail, ctxB);
+    assert.ok(user, 'tenant B lookup must return a user');
+    assert.strictEqual(user.tenantId, tenantBInfo.tenantId, 'returned user must belong to tenant B');
+    assert.strictEqual(user.id, tenantBInfo.userId, 'returned user ID must match tenant B user');
+  });
+
+  await test('Tenant A context must not return tenant B user', async function() {
+    var repos = createPgRepositories(pool);
+    var ctxA = { tenantId: tenantAInfo.tenantId };
+    var user = await repos.users.findActiveByEmail(tenantAInfo.sharedEmail, ctxA);
+    assert.ok(user, 'tenant A lookup must return a result');
+    assert.notStrictEqual(
+      user.id,
+      tenantBInfo.userId,
+      'tenant A context MUST NOT return tenant B user — cross-tenant auth isolation failure'
+    );
+  });
+
+  await test('Tenant B context must not return tenant A user', async function() {
+    var repos = createPgRepositories(pool);
+    var ctxB = { tenantId: tenantBInfo.tenantId };
+    var user = await repos.users.findActiveByEmail(tenantBInfo.sharedEmail, ctxB);
+    assert.ok(user, 'tenant B lookup must return a result');
+    assert.notStrictEqual(
+      user.id,
+      tenantAInfo.userId,
+      'tenant B context MUST NOT return tenant A user — cross-tenant auth isolation failure'
+    );
+  });
+
+  await test('Missing tenantId throws validation error — no silent cross-tenant fallback', async function() {
+    var repos = createPgRepositories(pool);
+    var threw = false;
+    var errCode;
+    try {
+      await repos.users.findActiveByEmail('anyone@test.local', null);
+    } catch (err) {
+      threw = true;
+      errCode = err.code;
+    }
+    assert.ok(threw, 'Missing tenantId must throw — must not silently return cross-tenant results');
+    assert.strictEqual(errCode, 'validation_error', 'Error code must be validation_error, got: ' + errCode);
+  });
+
+  await test('Empty context object without tenantId throws validation error', async function() {
+    var repos = createPgRepositories(pool);
+    var threw = false;
+    try {
+      await repos.users.findActiveByEmail('anyone@test.local', {});
+    } catch (err) {
+      threw = true;
+      assert.strictEqual(err.code, 'validation_error');
+    }
+    assert.ok(threw, 'Empty context without tenantId must throw');
   });
 
   // Print results BEFORE pool.end() so exit code is correct regardless of cleanup.

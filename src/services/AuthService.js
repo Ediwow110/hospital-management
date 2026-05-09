@@ -1,16 +1,16 @@
 'use strict';
 
 const { randomUUID } = require('crypto');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
 const { AppError, ERROR_CODES } = require('../core/AppError');
 const { ROLE_PERMISSIONS } = require('../core/permissions');
 const { AppContext } = require('../core/AppContext');
 
 /**
- * AuthService — demo login only.
- *
- * WARNING: This uses plaintext password comparison for demo purposes.
- * PR #4 must replace this with bcrypt hash comparison against PostgreSQL users table.
- * Do NOT use this in any internet-facing environment.
+ * AuthService — JWT-based authentication with bcrypt password verification.
+ * PR #9: replaced demo-token/Buffer.from auth with proper JWT + bcrypt.
+ * Still uses in-memory repos; PostgreSQL deferred to PR #4+.
  */
 class AuthService {
   /**
@@ -19,12 +19,13 @@ class AuthService {
   constructor({ userRepo, auditService }) {
     this._userRepo = userRepo;
     this._audit = auditService;
+    // PR #4: move JWT_SECRET to environment variable with proper key management
+    this._jwtSecret = process.env.JWT_SECRET || 'hms-demo-secret-change-in-production';
+    this._jwtExpiry = process.env.JWT_EXPIRY || '8h';
   }
 
   /**
-   * Demo login.
-   * Returns a synthetic session token (not a real JWT).
-   * PR #4: replace with signed JWT + refresh token.
+   * Login with bcrypt password verification and JWT token generation.
    *
    * @param {string} email
    * @param {string} password
@@ -34,30 +35,22 @@ class AuthService {
    * @returns {Promise<{ token: string, user: object }>}
    */
   async login(email, password, tenantId, ipAddress, deviceInfo = '') {
-    const systemCtx = {
+    const demoCtx = new AppContext({
+      requestId: randomUUID(),
       tenantId,
       branchId: 'system',
-      userId:   'system',
-      ipAddress,
-      deviceInfo,
-    };
-
-    const demoCtx = new AppContext({
-      requestId:  randomUUID(),
-      tenantId,
-      branchId:   'system',
-      userId:     'system',
-      roles:      ['system'],
+      userId: 'system',
+      roles: ['system'],
       permissions: [],
     });
 
     const user = await this._userRepo.findByEmail(email, demoCtx);
 
-    if (!user || user.passwordHash !== password) {
-      // Security event: persisted outside any business tx
+    if (!user || !user.passwordHash) {
+      // Security event: persisted outside any business transaction
       await this._audit.recordSecurityEvent(
         { tenantId, userId: email, ipAddress, deviceInfo },
-        'auth.login.failed',
+        'auth.login_failed',
         { email, reason: 'invalid_credentials' }
       );
       throw new AppError(ERROR_CODES.PERMISSION_DENIED, 'Invalid credentials');
@@ -66,71 +59,78 @@ class AuthService {
     if (user.status !== 'active') {
       await this._audit.recordSecurityEvent(
         { tenantId, userId: user.id, ipAddress, deviceInfo },
-        'auth.login.failed',
+        'auth.login_failed',
         { email, reason: 'account_inactive' }
       );
       throw new AppError(ERROR_CODES.PERMISSION_DENIED, 'Account is not active');
     }
 
-    // Demo token: base64(userId:tenantId:timestamp) — NOT secure, PR #4 replaces
-    const token = Buffer.from(
-      JSON.stringify({ userId: user.id, tenantId, roles: user.roles, iat: Date.now() })
-    ).toString('base64');
+    // bcrypt verification (not plaintext comparison)
+    const isValid = await bcrypt.compare(password, user.passwordHash);
+    if (!isValid) {
+      await this._audit.recordSecurityEvent(
+        { tenantId, userId: user.id, ipAddress, deviceInfo },
+        'auth.login_failed',
+        { email, reason: 'invalid_credentials' }
+      );
+      throw new AppError(ERROR_CODES.PERMISSION_DENIED, 'Invalid credentials');
+    }
+
+    // Generate JWT token
+    const token = jwt.sign(
+      {
+        userId: user.id,
+        tenantId,
+        roles: user.roles,
+        iat: Date.now(),
+      },
+      this._jwtSecret,
+      { expiresIn: this._jwtExpiry }
+    );
 
     await this._audit.record(
       new AppContext({
-        requestId:   randomUUID(),
+        requestId: randomUUID(),
         tenantId,
-        branchId:    user.branchId || 'system',
-        userId:      user.id,
-        roles:       user.roles,
-        permissions: (user.roles || []).flatMap(r => ROLE_PERMISSIONS[r] || []),
+        branchId: user.branchId || 'system',
+        userId: user.id,
+        roles: user.roles,
+        permissions: [],
       }),
-      'auth.login.success',
-      'User',
-      user.id,
-      { email }
+      'auth.login_success',
+      { email, ipAddress, deviceInfo }
     );
 
-    return {
-      token,
-      user: {
-        id:       user.id,
-        email:    user.email,
-        name:     user.name,
-        roles:    user.roles,
-        tenantId: user.tenantId,
-        branchId: user.branchId,
-      },
-    };
+    return { token, user: { ...user, passwordHash: undefined } };
   }
 
   /**
-   * Decode demo token into AppContext.
-   * PR #4: replace with JWT verification.
+   * Verify JWT token and return decoded payload.
+   *
    * @param {string} token
-   * @param {string} requestId
-   * @param {string} ipAddress
-   * @param {string} [deviceInfo]
-   * @returns {AppContext}
+   * @returns {Promise<object>}
    */
-  decodeToken(token, requestId, ipAddress, deviceInfo = '') {
+  async verifyToken(token) {
     try {
-      const payload = JSON.parse(Buffer.from(token, 'base64').toString('utf8'));
-      const permissions = (payload.roles || []).flatMap(r => ROLE_PERMISSIONS[r] || []);
-      return new AppContext({
-        requestId,
-        tenantId:    payload.tenantId,
-        branchId:    payload.branchId || 'default',
-        userId:      payload.userId,
-        roles:       payload.roles || [],
-        permissions,
-        ipAddress,
-        deviceInfo,
-      });
-    } catch {
+      const payload = jwt.verify(token, this._jwtSecret);
+      const permissions = (payload.roles || []).flatMap((r) => ROLE_PERMISSIONS[r] || []);
+      return { ...payload, permissions };
+    } catch (err) {
       throw new AppError(ERROR_CODES.PERMISSION_DENIED, 'Invalid or expired token');
     }
+  }
+
+  /**
+   * Logout (currently no server-side revocation).
+   * PR #4+: implement revocation table for server-side token invalidation.
+   *
+   * @param {string} token
+   * @param {object} context
+   * @returns {Promise<void>}
+   */
+  async logout(token, context) {
+    await this._audit.record(context, 'auth.logout', { userId: context.userId });
+    // PR #4+: add token to revocation list in PostgreSQL
   }
 }
 

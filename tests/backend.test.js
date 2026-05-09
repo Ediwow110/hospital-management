@@ -5,7 +5,7 @@
  * Backend workflow tests using in-memory adapters.
  *
  * Tests cover all mandatory HMS workflows:
- *   health check, login/demo auth, patient registration,
+ *   health check, bcrypt/JWT auth, patient registration,
  *   order creation, payment posting, cashier session open/close,
  *   specimen collection, lab result encode/validate/approve/release.
  *
@@ -38,12 +38,16 @@ const { OrderService } = require('../src/services/OrderService');
 const { BillingService } = require('../src/services/BillingService');
 const { LabService } = require('../src/services/LabService');
 
+const { hashPassword } = require('../src/auth/hash');
+const { verifyAccessToken } = require('../src/auth/jwtService');
+
 // ---------------------------------------------------------------------------
 // Test helpers
 // ---------------------------------------------------------------------------
 
 const TENANT_ID = 'tenant-test';
 const BRANCH_ID = 'branch-main';
+const TEST_PASSWORD = 'correct-test-password';
 
 /**
  * Build an AppContext for a given userId and role.
@@ -70,11 +74,11 @@ let failed = 0;
 async function test(name, fn) {
   try {
     await fn();
-    console.log(`  PASS  ${name}`);
+    console.log(`  PASS ${name}`);
     passed++;
   } catch (err) {
-    console.error(`  FAIL  ${name}`);
-    console.error(`        ${err.message}`);
+    console.error(`  FAIL ${name}`);
+    console.error(`    ${err.message}`);
     failed++;
   }
 }
@@ -85,7 +89,6 @@ async function test(name, fn) {
 
 const auditLogRepo = new InMemoryAuditLogRepository();
 const auditService = new AuditService({ auditLogRepo });
-
 const userRepo = new InMemoryUserRepository();
 const patientRepo = new InMemoryPatientRepository();
 const orderRepo = new InMemoryOrderRepository();
@@ -101,24 +104,27 @@ const orderService = new OrderService({ orderRepo, invoiceRepo, auditService });
 const billingService = new BillingService({ invoiceRepo, paymentRepo, cashierSessionRepo, auditService });
 const labService = new LabService({ labResultRepo, auditService });
 
-// Seed a test user (passwordHash = plaintext for demo per AuthService docs)
+// Test user ID — seeded inside async IIFE after hashing
 const TEST_USER_ID = randomUUID();
-userRepo._set(TEST_USER_ID, {
-  id: TEST_USER_ID,
-  tenantId: TENANT_ID,
-  branchId: BRANCH_ID,
-  email: 'admin@test.com',
-  passwordHash: 'password123',
-  name: 'Test Admin',
-  roles: ['superadmin'],
-  status: 'active',
-});
 
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
 (async () => {
+  // Seed test user with a real bcrypt hash so AuthService.verifyPassword succeeds
+  const passwordHash = await hashPassword(TEST_PASSWORD);
+  userRepo._set(TEST_USER_ID, {
+    id: TEST_USER_ID,
+    tenantId: TENANT_ID,
+    branchId: BRANCH_ID,
+    email: 'admin@test.com',
+    passwordHash,
+    name: 'Test Admin',
+    roles: ['superadmin'],
+    status: 'active',
+  });
+
   console.log('\nPR #3 Backend Workflow Tests');
   console.log('==============================\n');
 
@@ -135,38 +141,58 @@ userRepo._set(TEST_USER_ID, {
   await test('login with valid credentials returns token and user', async () => {
     const result = await authService.login(
       'admin@test.com',
-      'password123',
+      TEST_PASSWORD,
       TENANT_ID,
       '127.0.0.1',
       'test-runner'
     );
-    assert.ok(result.token);
+    assert.ok(result.token, 'token must be present');
     assert.strictEqual(result.user.email, 'admin@test.com');
+    // Token must be a JWT (three dot-separated base64url segments), not a demo/base64 blob
+    assert.ok(
+      /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(result.token),
+      'token must be a valid JWT'
+    );
   });
 
-  await test('login with wrong password throws PERMISSION_DENIED', async () => {
+  await test('login with wrong password throws UNAUTHENTICATED', async () => {
     let threw = false;
     try {
       await authService.login('admin@test.com', 'wrongpass', TENANT_ID, '127.0.0.1');
     } catch (err) {
       threw = true;
       assert.ok(err instanceof AppError);
-      assert.strictEqual(err.code, ERROR_CODES.PERMISSION_DENIED);
+      assert.strictEqual(err.code, ERROR_CODES.UNAUTHENTICATED);
     }
     assert.ok(threw, 'Expected error to be thrown');
   });
 
-  await test('decodeToken returns valid AppContext', async () => {
-    const { token } = await authService.login('admin@test.com', 'password123', TENANT_ID, '127.0.0.1');
+  await test('decodeToken returns valid AppContext with JWT claims', async () => {
+    const { token } = await authService.login(
+      'admin@test.com',
+      TEST_PASSWORD,
+      TENANT_ID,
+      '127.0.0.1',
+      'test-runner'
+    );
+    // Verify using the real JWT verification path — not jwt.decode
+    const payload = verifyAccessToken(token);
+    assert.ok(payload.userId || payload.sub, 'payload must contain userId or sub');
+    assert.ok(payload.tenantId, 'payload must contain tenantId');
+    assert.ok(payload.jti, 'payload must contain jti');
+    assert.ok(payload.exp, 'payload must contain exp');
+    assert.ok(Array.isArray(payload.roles), 'payload must contain roles array');
+
+    // Also confirm decodeToken builds a valid AppContext
     const ctx = authService.decodeToken(token, randomUUID(), '127.0.0.1');
     assert.ok(ctx instanceof AppContext);
     assert.strictEqual(ctx.tenantId, TENANT_ID);
+    assert.ok(ctx.userId, 'AppContext must contain userId');
   });
 
   // -- Patient Registration --
   console.log('\nPatient Registration');
   const adminCtx = makeCtx({ userId: TEST_USER_ID, roles: ['superadmin'] });
-
   let patient;
   await test('register patient succeeds with required fields', async () => {
     patient = await patientService.registerPatient({
@@ -208,7 +234,6 @@ userRepo._set(TEST_USER_ID, {
 
   // -- Order Creation --
   console.log('\nOrder Creation');
-
   let order;
   let invoice;
   await test('createOrder returns order and invoice', async () => {
@@ -246,10 +271,8 @@ userRepo._set(TEST_USER_ID, {
 
   // -- Cashier Session --
   console.log('\nCashier Session');
-
   const cashierUserId = 'cashier-1';
   const cashierCtx = makeCtx({ userId: cashierUserId, roles: ['superadmin'] });
-
   let session;
   await test('open cashier session succeeds', async () => {
     session = await billingService.openSession({ startingCash: 5000 }, cashierCtx);
@@ -271,7 +294,6 @@ userRepo._set(TEST_USER_ID, {
 
   // -- Payment Posting --
   console.log('\nPayment Posting');
-
   await test('postPayment reduces invoice balance', async () => {
     assert.ok(invoice, 'Prerequisite: invoice must exist');
     assert.ok(session, 'Prerequisite: session must exist');
@@ -314,7 +336,6 @@ userRepo._set(TEST_USER_ID, {
 
   // -- Cashier Session Close (owner-only) --
   console.log('\nCashier Session Close');
-
   await test('non-owner cannot close cashier session', async () => {
     assert.ok(session, 'Prerequisite: session must exist');
     const otherCtx = makeCtx({ userId: 'other-user', roles: ['receptionist'] });
@@ -338,7 +359,6 @@ userRepo._set(TEST_USER_ID, {
 
   // -- Lab Workflow --
   console.log('\nLab Workflow');
-
   let labResult;
   await test('createResult creates lab result in Pending Collection', async () => {
     assert.ok(order, 'Prerequisite: order must exist');

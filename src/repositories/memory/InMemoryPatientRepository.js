@@ -1,15 +1,11 @@
 'use strict';
 
 const { InMemoryStore } = require('./InMemoryStore');
-const { AppError, ERROR_CODES } = require('../../core/AppError');
 
 class InMemoryPatientRepository extends InMemoryStore {
   async findById(id, context, tx) {
     const record = this._get(id);
-    if (!record) return null;
-    if (record.tenantId !== context.tenantId) {
-      throw new AppError(ERROR_CODES.PERMISSION_DENIED, 'Cross-tenant patient access denied');
-    }
+    if (!record || record.tenantId !== context.tenantId) return null;
     return record;
   }
 
@@ -29,6 +25,19 @@ class InMemoryPatientRepository extends InMemoryStore {
     return this._all().filter(
       r => r.tenantId === context.tenantId && r.branchId === branchId
     );
+  }
+
+  /**
+   * Returns only { id, tenantId } for the given record id, without tenant scoping.
+   * MUST NOT return PHI. Used exclusively for CROSS_TENANT_ACCESS_ATTEMPT detection.
+   * Never call this from a user-facing read path.
+   * @param {string} id
+   * @returns {{ id: string, tenantId: string } | null}
+   */
+  findTenantIdByIdUnscopedForSecurityCheck(id) {
+    const record = this._get(id);
+    if (!record) return null;
+    return { id: record.id, tenantId: record.tenantId };
   }
 }
 

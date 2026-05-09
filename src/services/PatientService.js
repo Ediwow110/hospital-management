@@ -5,20 +5,22 @@ const { AppError, ERROR_CODES } = require('../core/AppError');
 const { PERMISSIONS } = require('../core/permissions');
 
 class PatientService {
-  constructor({ patientRepo, auditService }) {
+  constructor({ patientRepo, auditService, securityAuditService }) {
     this._repo = patientRepo;
     this._audit = auditService;
+    this._securityAudit = securityAuditService;
   }
 
-  /**
-   * Register a new patient.
-   * @param {object} data
-   * @param {AppContext} context
-   * @returns {Promise<object>}
-   */
   async registerPatient(data, context) {
     if (!context.can(PERMISSIONS.PATIENT_CREATE)) {
       await this._audit.recordSecurityEvent(context, 'patient.create.denied', { data });
+      if (this._securityAudit) {
+        await this._securityAudit.log('PERMISSION_DENIED', {
+          tenantId: context.tenantId,
+          userId: context.userId,
+          payload: { action: PERMISSIONS.PATIENT_CREATE },
+        });
+      }
       throw new AppError(ERROR_CODES.PERMISSION_DENIED, 'patient.create permission required');
     }
 
@@ -32,36 +34,50 @@ class PatientService {
     const patient = {
       id,
       mrn,
-      firstName:    data.firstName,
-      lastName:     data.lastName,
-      dateOfBirth:  data.dateOfBirth,
-      sex:          data.sex || null,
-      phone:        data.phone || null,
-      email:        data.email || null,
-      branchId:     context.branchId,
-      status:       'active',
-      createdAt:    new Date().toISOString(),
+      firstName: data.firstName,
+      lastName: data.lastName,
+      dateOfBirth: data.dateOfBirth,
+      sex: data.sex || null,
+      phone: data.phone || null,
+      email: data.email || null,
+      branchId: context.branchId,
+      status: 'active',
+      createdAt: new Date().toISOString(),
     };
 
     const saved = await this._repo.save(patient, context);
-
     await this._audit.record(context, 'patient.create', 'Patient', id, { mrn });
-
     return saved;
   }
 
-  /**
-   * Get patient by ID. Enforces tenant scope.
-   * @param {string} id
-   * @param {AppContext} context
-   * @returns {Promise<object>}
-   */
   async getPatient(id, context) {
     if (!context.can(PERMISSIONS.PATIENT_VIEW)) {
+      if (this._securityAudit) {
+        await this._securityAudit.log('PERMISSION_DENIED', {
+          tenantId: context.tenantId,
+          userId: context.userId,
+          payload: { action: PERMISSIONS.PATIENT_VIEW, patientId: id },
+        });
+      }
       throw new AppError(ERROR_CODES.PERMISSION_DENIED, 'patient.view permission required');
     }
+
     const patient = await this._repo.findById(id, context);
     if (!patient) {
+      // Use the safe unscoped method to detect cross-tenant attempts.
+      // This method returns ONLY { id, tenantId } — never PHI.
+      // It is not available in the Postgres adapter (PR #4 will add it);
+      // in that case we skip the detection safely.
+      if (this._securityAudit && typeof this._repo.findTenantIdByIdUnscopedForSecurityCheck === 'function') {
+        const meta = this._repo.findTenantIdByIdUnscopedForSecurityCheck(id);
+        if (meta && meta.tenantId !== context.tenantId) {
+          await this._securityAudit.log('CROSS_TENANT_ACCESS_ATTEMPT', {
+            tenantId: context.tenantId,
+            userId: context.userId,
+            payload: { patientId: id, targetTenantId: meta.tenantId },
+          });
+        }
+      }
       throw new AppError(ERROR_CODES.NOT_FOUND, `Patient ${id} not found`);
     }
     return patient;

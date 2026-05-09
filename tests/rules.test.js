@@ -74,6 +74,58 @@ function testNoUnwiredStaticActions() {
   assert.deepStrictEqual(missing, []);
 }
 
+function testNavigationTargetsExist() {
+  const root = path.join(__dirname, '..');
+  const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+  const screens = new Set([...html.matchAll(/id="screen-([^"]+)"/g)].map(match => match[1]));
+  const navTargets = [...html.matchAll(/data-screen="([^"]+)"/g)].map(match => match[1]);
+  const jumpTargets = [...html.matchAll(/data-jump="([^"]+)"/g)].map(match => match[1]);
+  assert.deepStrictEqual(navTargets.filter(target => !screens.has(target)), []);
+  assert.deepStrictEqual(jumpTargets.filter(target => !screens.has(target)), []);
+}
+
+function testUniqueDomIds() {
+  const root = path.join(__dirname, '..');
+  const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+  const ids = [...html.matchAll(/\sid="([^"]+)"/g)].map(match => match[1]);
+  const duplicates = ids.filter((id, index) => ids.indexOf(id) !== index);
+  assert.deepStrictEqual(duplicates, []);
+}
+
+function testVisibleButtonsHaveBehavior() {
+  const root = path.join(__dirname, '..');
+  const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+  const unhandledButtons = [...html.matchAll(/<button\b([^>]*)>/g)]
+    .map(match => match[1])
+    .filter(attributes => {
+      const type = attributes.match(/\btype="([^"]+)"/)?.[1] || 'submit';
+      return !['submit', 'reset'].includes(type) &&
+        !attributes.includes('data-action=') &&
+        !attributes.includes('data-jump=') &&
+        !attributes.includes('data-screen=') &&
+        !attributes.includes('data-bs-dismiss=') &&
+        !attributes.includes('data-bs-toggle=') &&
+        !attributes.includes('id="logout-btn"') &&
+        !attributes.includes('id="reason-confirm"');
+    });
+  assert.deepStrictEqual(unhandledButtons, []);
+}
+
+function testPatientIdentityHeadersExist() {
+  const root = path.join(__dirname, '..');
+  const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+  const js = fs.readFileSync(path.join(root, 'assets/js/app.js'), 'utf8');
+  const requiredPatientScreens = ['profile', 'orders', 'billing', 'receipt', 'queue', 'lab', 'lab-approval', 'print', 'portal'];
+  const missing = requiredPatientScreens.filter(screen => {
+    const pattern = new RegExp(`id="screen-${screen}"[\\s\\S]*?<div class="patient-context" data-patient-header>`);
+    return !pattern.test(html);
+  });
+  assert.deepStrictEqual(missing, []);
+  ['Patient', 'Age / Sex', 'Birthdate', 'Contact', 'Category / Alerts'].forEach(label => {
+    assert.ok(js.includes(label), `${label} missing from patient identity header renderer`);
+  });
+}
+
 testNumbering();
 testPermissions();
 testMakerChecker();
@@ -82,5 +134,9 @@ testPaymentRules();
 testStatusClasses();
 testInventoryStatus();
 testNoUnwiredStaticActions();
+testNavigationTargetsExist();
+testUniqueDomIds();
+testVisibleButtonsHaveBehavior();
+testPatientIdentityHeadersExist();
 
 console.log('All HMS rule tests passed.');

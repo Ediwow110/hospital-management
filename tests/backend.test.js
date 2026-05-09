@@ -248,7 +248,6 @@ userRepo._set(TEST_USER_ID, {
   console.log('\nCashier Session');
 
   const cashierUserId = 'cashier-1';
-  // superadmin has BILLING_PAYMENT_CREATE
   const cashierCtx = makeCtx({ userId: cashierUserId, roles: ['superadmin'] });
 
   let session;
@@ -283,7 +282,7 @@ userRepo._set(TEST_USER_ID, {
     }, adminCtx);
     assert.ok(result.invoice);
     assert.strictEqual(result.invoice.balance, 400);
-    assert.strictEqual(result.invoice.status, 'PartiallyPaid');
+    assert.strictEqual(result.invoice.status, 'Partially Paid');
   });
 
   await test('postPayment pays invoice in full', async () => {
@@ -318,7 +317,6 @@ userRepo._set(TEST_USER_ID, {
 
   await test('non-owner cannot close cashier session', async () => {
     assert.ok(session, 'Prerequisite: session must exist');
-    // Use a non-owner ctx with receptionist role (not branch_manager or superadmin)
     const otherCtx = makeCtx({ userId: 'other-user', roles: ['receptionist'] });
     let threw = false;
     try {

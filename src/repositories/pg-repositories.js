@@ -54,8 +54,8 @@ function createPgRepositories(pool) {
                   branch_id        AS "branchId",
                   email,
                   password_hash    AS "passwordHash",
-                  name,
-                  roles,
+                  full_name AS "name",
+                  role AS "roles",
                   status
              FROM users
             WHERE email     = $1

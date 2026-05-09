@@ -33,7 +33,7 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Guard — node_modules must not be tracked in git
+      - name: Guard - node_modules must not be tracked in git
         run: |
           if git ls-files node_modules | grep -q .; then
             echo "FATAL: node_modules is tracked in git. Remove it and update .gitignore."
@@ -41,7 +41,7 @@ jobs:
           fi
           echo "OK: node_modules is not tracked."
 
-      - name: Guard — no demo-token or base64 token logic in source
+      - name: Guard - no demo-token or base64 token logic in source
         run: |
           if grep -rn 'demo-token\|Buffer\.from.*token\|base64.*token' src/ tests/ --include='*.js' 2>/dev/null; then
             echo "FATAL: Demo token logic detected in source."
@@ -49,13 +49,25 @@ jobs:
           fi
           echo "OK: No demo token logic found."
 
-      - name: Guard — no plaintext password comparison in source
+      - name: Guard - no plaintext password comparison in source
         run: |
           if grep -rn 'passwordHash\s*===\|===\s*password\|password\s*===' src/ --include='*.js' 2>/dev/null; then
             echo "FATAL: Possible plaintext password comparison detected."
             exit 1
           fi
           echo "OK: No plaintext password comparison found."
+
+      - name: Guard - jwt.decode must not be used for authentication
+        run: |
+          if grep -rn 'jwt\.decode' src/ --include='*.js' 2>/dev/null; then
+            echo "FATAL: jwt.decode must not be used for authentication."
+            exit 1
+          fi
+          echo "OK: No jwt.decode usage found."
+
+      - name: Guard - JWT verification path exists
+        run: |
+          grep -rnE 'jwt\.verify|verifyAccessToken' src/ --include='*.js'
 
       - name: Syntax checks (npm run check)
         run: npm run check
@@ -64,4 +76,9 @@ jobs:
         run: npm test
 
       - name: Integration tests (npm run test:integration)
-        run: npm run test:integration 2>/dev/null || echo "No test:integration script defined — skipping."
+        run: |
+          if npm run | grep -q "test:integration"; then
+            npm run test:integration
+          else
+            echo "No test:integration script defined - skipping."
+          fi

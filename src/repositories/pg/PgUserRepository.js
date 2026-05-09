@@ -63,24 +63,25 @@ class PgUserRepository {
   async save(user, context) {
     const client = context._tx || this._pool;
     const { rows } = await client.query(
-      `INSERT INTO users (id, tenant_id, branch_id, email, password_hash, full_name AS "name", role AS "roles", status)
+      `INSERT INTO users (id, tenant_id, branch_id, email, password_hash, full_name, role, status)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        ON CONFLICT (id) DO UPDATE SET
          email = EXCLUDED.email,
          password_hash = EXCLUDED.password_hash,
-         name = EXCLUDED.full_name AS "name",
-         roles = EXCLUDED.role AS "roles",
+         full_name = EXCLUDED.full_name,
+         role = EXCLUDED.role,
          status = EXCLUDED.status
        RETURNING id, tenant_id AS "tenantId", branch_id AS "branchId",
-                 email, password_hash AS "passwordHash", full_name AS "name", role AS "roles", status`,
+                 email, password_hash AS "passwordHash", full_name AS "name",
+                 role AS "roles", status`,
       [
         user.id,
         user.tenantId,
         user.branchId,
         user.email,
         user.passwordHash,
-        user.full_name AS "name",
-        user.role AS "roles",
+        user.name,
+        user.roles,
         user.status,
       ]
     );

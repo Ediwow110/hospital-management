@@ -7,10 +7,17 @@ on:
       - main
       - pr3-backend-runtime
       - "pr3/**"
+      - pr9-tenant-hardening-db-guards
+      - "pr9/**"
+
+env:
+  NODE_ENV: test
+  JWT_SECRET: test-jwt-secret-for-ci-only-32chars-minimum
+  STORAGE_ADAPTER: memory
 
 jobs:
   check-and-test:
-    name: Syntax checks and workflow tests
+    name: Syntax checks, security guards, and tests
     runs-on: ubuntu-latest
 
     steps:
@@ -22,8 +29,77 @@ jobs:
         with:
           node-version: "22"
 
+      - name: Check node_modules not tracked
+        run: |
+          if git ls-files node_modules | grep -q .; then
+            echo "ERROR: node_modules is tracked in git"
+            exit 1
+          fi
+          echo "node_modules not tracked - OK"
+
       - name: Install dependencies
-        run: npm install --ignore-scripts 2>/dev/null || true
+        run: npm install
+
+      - name: Security guard - no demo-token in src/tests
+        run: |
+          if grep -rn 'demo-token\|demo_token' src/ tests/ --include='*.js' 2>/dev/null | grep -q .; then
+            echo "ERROR: demo-token pattern found in src/ or tests/"
+            grep -rn 'demo-token\|demo_token' src/ tests/ --include='*.js'
+            exit 1
+          fi
+          echo "No demo-token pattern - OK"
+
+      - name: Security guard - no Buffer.from base64 token auth in src
+        run: |
+          if grep -rn 'Buffer\.from.*base64\|base64.*Buffer\.from' src/ --include='*.js' 2>/dev/null | grep -q .; then
+            echo "ERROR: Buffer.from base64 token pattern found in src/"
+            exit 1
+          fi
+          echo "No Buffer.from base64 token auth - OK"
+
+      - name: Security guard - no plaintext password comparison
+        run: |
+          if grep -rn 'passwordHash ===\|passwordHash !==\|=== password\b\|!== password\b\|password ===' src/ --include='*.js' 2>/dev/null | grep -q .; then
+            echo "ERROR: Plaintext password comparison found in src/"
+            grep -rn 'passwordHash ===\|passwordHash !==\|=== password\b\|!== password\b\|password ===' src/ --include='*.js'
+            exit 1
+          fi
+          echo "No plaintext password comparison - OK"
+
+      - name: Security guard - no jwt.decode for auth in src
+        run: |
+          if grep -rn 'jwt\.decode' src/ --include='*.js' 2>/dev/null | grep -q .; then
+            echo "ERROR: jwt.decode found in src/ - use jwt.verify"
+            grep -rn 'jwt\.decode' src/ --include='*.js'
+            exit 1
+          fi
+          echo "No jwt.decode in src/ - OK"
+
+      - name: Architecture guard - no pg import in services
+        run: |
+          if grep -rn "require('pg')\|require(\"pg\")" src/services/ --include='*.js' 2>/dev/null | grep -q .; then
+            echo "ERROR: pg imported directly in services layer"
+            grep -rn "require('pg')\|require(\"pg\")" src/services/ --include='*.js'
+            exit 1
+          fi
+          echo "No pg in services - OK"
+
+      - name: Architecture guard - no raw SQL in services
+        run: |
+          if grep -rn -iE '\bSELECT\b.*\bFROM\b|\bINSERT\s+INTO\b|\bUPDATE\b.*\bSET\b|\bDELETE\s+FROM\b' src/services/ --include='*.js' 2>/dev/null | grep -q .; then
+            echo "ERROR: Raw SQL found in services layer"
+            grep -rn -iE '\bSELECT\b.*\bFROM\b|\bINSERT\s+INTO\b|\bUPDATE\b.*\bSET\b|\bDELETE\s+FROM\b' src/services/ --include='*.js'
+            exit 1
+          fi
+          echo "No raw SQL in services - OK"
+
+      - name: No production-ready claim
+        run: |
+          if grep -rn 'production-ready' docs/ README.md package.json 2>/dev/null | grep -iv 'not production-ready\|before production\|non-production' | grep -q .; then
+            echo "ERROR: bare production-ready claim found"
+            exit 1
+          fi
+          echo "No bare production-ready claim - OK"
 
       - name: Syntax checks (npm run check)
         run: npm run check

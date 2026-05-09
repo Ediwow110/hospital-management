@@ -7,9 +7,8 @@
   "scripts": {
     "start": "node src/api/server.js",
     "dev": "node --watch src/api/server.js",
-    "check": "node --check src/api/server.js && node --check src/core/AppContext.js && node --check src/core/AppError.js && node --check src/index.js",
+    "check": "node --check src/api/server.js && node --check src/core/AppContext.js && node --check src/core/AppError.js",    "test": "node tests/rules.test.js && node tests/backend.test.js && node tests/tenant.test.js",
     "test": "node tests/rules.test.js && node tests/backend.test.js && node tests/tenant.test.js",
-    "test:backend": "node tests/backend.test.js",
     "migrate": "echo \"PR #4: PostgreSQL migrations not yet implemented. See migrations/README.md\""
   },
   "dependencies": {

@@ -46,6 +46,11 @@ class AuthService {
 
     const user = await this._userRepo.findByEmail(email, demoCtx);
 
+        // Require branchId for all users (no 'system' fallback)
+    if (!user.branchId) {
+      throw new AppError(ERROR_CODES.VALIDATION_ERROR, 'User account missing required branchId');
+    }
+
     if (!user || !user.passwordHash) {
       // Security event: persisted outside any business transaction
       await this._audit.recordSecurityEvent(
@@ -81,8 +86,7 @@ class AuthService {
       {
         userId: user.id,
         tenantId,
-              branchId: user.branchId || 'system',
-        roles: user.roles,
+branchId: user.branchId,        roles: user.roles,
         iat: Date.now(),
       },
       this._jwtSecret,
@@ -93,8 +97,7 @@ class AuthService {
       new AppContext({
         requestId: randomUUID(),
         tenantId,
-        branchId: user.branchId || 'system',
-        userId: user.id,
+      branchId: user.branchId,        userId: user.id,
         roles: user.roles,
         permissions: [],
       }),

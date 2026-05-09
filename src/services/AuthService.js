@@ -110,7 +110,7 @@ class AuthService {
    * @param {string} token
    * @returns {Promise<object>}
    */
-async verifyToken(token, requestId, ipAddress) {
+ verifyToken(token, requestId, ipAddress) {
     try {
       const payload = jwt.verify(token, this._jwtSecret);
       const permissions = (payload.roles || []).flatMap((r) => ROLE_PERMISSIONS[r] || []);

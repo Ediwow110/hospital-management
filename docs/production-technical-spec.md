@@ -76,7 +76,7 @@ All write endpoints require request validation, permission checks, tenant/branch
 | `/appointments` | `POST /appointments`, `PATCH /appointments/:id/reschedule`, `POST /appointments/:id/no-show` | patient/department scope, reminder jobs |
 | `/queue` | `POST /queue`, `POST /queue/:id/call`, `POST /queue/:id/skip`, `POST /queue/:id/complete` | queue permission, queue event logging |
 | `/orders` | `POST /orders`, `POST /orders/:id/cancel`, `POST /orders/:id/void-request` | price version locking, reason for cancel/void |
-| `/billing` | `POST /invoices/:id/payments`, `POST /payments/:id/refund-request`, `POST /payments/:id/void-request`, `POST /cashier-sessions/:id/close` | idempotency, balance validation, maker-checker, cashier reconciliation |
+| `/billing` | `POST /invoices/:id/payments`, `POST /payments/:id/refund-request`, `POST /payments/:id/void-request`, `POST /cashier-sessions`, `POST /cashier-sessions/:id/close` | scoped idempotency, balance validation, maker-checker, cashier ownership, cashier reconciliation |
 | `/lab` | `POST /lab-orders/:id/collect`, `POST /lab-orders/:id/receive`, `POST /lab-results/:id/encode`, `POST /lab-results/:id/validate`, `POST /lab-results/:id/approve`, `POST /lab-results/:id/release`, `POST /lab-results/:id/amend-request` | status engine, chain of custody, dual approval, result locking |
 | `/inventory` | `POST /receiving`, `POST /stock-movements`, `POST /stock-adjustments`, `POST /physical-counts` | batch/expiry validation, expired issue block, approval |
 | `/hr` | `POST /employees`, `POST /employees/:id/offboard`, `POST /leave-requests`, `POST /payroll-exports` | HR scope, access revocation, approval |
@@ -94,7 +94,7 @@ Idempotency-Key: <uuid>
 X-Branch-Id: <branch uuid>
 ```
 
-Use idempotency keys for payments, refunds, voids, result release, inventory movements, imports, exports, and backup/restore operations.
+Use idempotency keys for payments, refunds, voids, result release, inventory movements, imports, exports, and backup/restore operations. Idempotency cache scope must include tenant, branch, user, method, concrete path, route pattern, operation, and raw key so one user, route, tenant, or branch cannot receive another operation's cached response.
 
 ### Error shape
 

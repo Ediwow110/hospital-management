@@ -43,6 +43,8 @@ INSERT INTO permissions (code, module, description) VALUES
 ('billing.payment.void.approve', 'billing', 'Approve payment void.'),
 ('billing.refund.request', 'billing', 'Request refund.'),
 ('billing.refund.approve', 'billing', 'Approve refund.'),
+('cashier.session.open', 'billing', 'Open cashier session.'),
+('cashier.session.close', 'billing', 'Close owned cashier session.'),
 ('cashier.close', 'billing', 'Close cashier session.'),
 ('inventory.receive', 'inventory', 'Receive inventory.'),
 ('inventory.transfer', 'inventory', 'Transfer inventory.'),
@@ -88,7 +90,7 @@ ON CONFLICT DO NOTHING;
 INSERT INTO role_permissions (role_id, permission_id)
 SELECT r.id, p.id
 FROM roles r
-JOIN permissions p ON p.code IN ('billing.payment.create', 'billing.payment.void.request', 'billing.refund.request', 'cashier.close', 'report.view')
+JOIN permissions p ON p.code IN ('billing.payment.create', 'billing.payment.void.request', 'billing.refund.request', 'cashier.session.open', 'cashier.session.close', 'cashier.close', 'report.view')
 WHERE r.code = 'cashier'
 ON CONFLICT DO NOTHING;
 

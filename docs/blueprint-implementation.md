@@ -129,6 +129,8 @@ Roles are permission bundles, not hard-coded logic. Clinical access for administ
 - billing.payment.void.approve
 - billing.refund.request
 - billing.refund.approve
+- cashier.session.open
+- cashier.session.close
 - cashier.close
 - inventory.receive
 - inventory.transfer

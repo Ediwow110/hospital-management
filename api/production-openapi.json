@@ -21,6 +21,7 @@
     "branchScoped": true,
     "auditRequiredForSensitiveActions": true,
     "idempotencyRequiredForHighRiskWrites": true,
+    "idempotencyScope": ["tenant_id", "branch_id", "user_id", "method", "path", "route_pattern", "operation", "raw_idempotency_key"],
     "rawDatabaseErrorsExposed": false
   },
   "paths": {
@@ -214,15 +215,26 @@
         "responses": { "202": { "$ref": "#/components/responses/ApprovalResponse" } }
       }
     },
+    "/billing/cashier-sessions": {
+      "post": {
+        "tags": ["billing"],
+        "summary": "Open cashier session",
+        "x-permission": "cashier.session.open",
+        "x-controls": ["single_active_session_per_cashier_branch", "audit", "idempotency"],
+        "parameters": [{ "$ref": "#/components/parameters/IdempotencyKey" }],
+        "requestBody": { "$ref": "#/components/requestBodies/CashierOpenRequest" },
+        "responses": { "201": { "$ref": "#/components/responses/RecordResponse" }, "409": { "$ref": "#/components/responses/Error" } }
+      }
+    },
     "/billing/cashier-sessions/{id}/close": {
       "post": {
         "tags": ["billing"],
         "summary": "Close cashier session",
-        "x-permission": "cashier.close",
-        "x-controls": ["reconciliation", "audit", "manager_review_when_variance"],
+        "x-permission": "cashier.session.close",
+        "x-controls": ["owner_only_close", "reconciliation", "audit", "manager_review_when_variance"],
         "parameters": [{ "$ref": "#/components/parameters/Id" }, { "$ref": "#/components/parameters/IdempotencyKey" }],
         "requestBody": { "$ref": "#/components/requestBodies/CashierCloseRequest" },
-        "responses": { "200": { "$ref": "#/components/responses/RecordResponse" } }
+        "responses": { "200": { "$ref": "#/components/responses/RecordResponse" }, "403": { "$ref": "#/components/responses/Error" }, "409": { "$ref": "#/components/responses/Error" } }
       }
     },
     "/lab/orders/{id}/collect": {
@@ -428,6 +440,7 @@
       "AppointmentRequest": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AppointmentRequest" } } } },
       "OrderRequest": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/OrderRequest" } } } },
       "PaymentRequest": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PaymentRequest" } } } },
+      "CashierOpenRequest": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CashierOpenRequest" } } } },
       "CashierCloseRequest": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CashierCloseRequest" } } } },
       "LabEncodeRequest": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/LabEncodeRequest" } } } },
       "ReceivingRequest": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ReceivingRequest" } } } },
@@ -456,6 +469,7 @@
       "AppointmentRequest": { "type": "object", "required": ["patientId", "appointmentAt", "serviceIds"], "properties": { "patientId": { "type": "string" }, "appointmentAt": { "type": "string", "format": "date-time" }, "serviceIds": { "type": "array", "items": { "type": "string" } } } },
       "OrderRequest": { "type": "object", "required": ["patientId", "items"], "properties": { "patientId": { "type": "string" }, "items": { "type": "array", "items": { "type": "object", "required": ["serviceId"], "properties": { "serviceId": { "type": "string" }, "quantity": { "type": "number", "minimum": 1 } } } } } },
       "PaymentRequest": { "type": "object", "required": ["paymentMode", "amount"], "properties": { "paymentMode": { "type": "string" }, "amount": { "type": "number", "exclusiveMinimum": 0 }, "referenceNo": { "type": "string" } } },
+      "CashierOpenRequest": { "type": "object", "required": ["openingCash"], "properties": { "openingCash": { "type": "number", "minimum": 0 }, "reason": { "type": "string" } } },
       "CashierCloseRequest": { "type": "object", "required": ["actualCash", "remarks"], "properties": { "actualCash": { "type": "number", "minimum": 0 }, "remarks": { "type": "string", "minLength": 3 } } },
       "LabEncodeRequest": { "type": "object", "required": ["items"], "properties": { "items": { "type": "array", "items": { "type": "object", "required": ["analyte", "resultValue"], "properties": { "analyte": { "type": "string" }, "resultValue": { "type": "string" }, "unit": { "type": "string" }, "referenceRange": { "type": "string" } } } }, "comments": { "type": "string" } } },
       "ReceivingRequest": { "type": "object", "required": ["inventoryItemId", "supplierId", "batchNo", "expiryDate", "quantity"], "properties": { "inventoryItemId": { "type": "string" }, "supplierId": { "type": "string" }, "batchNo": { "type": "string" }, "expiryDate": { "type": "string", "format": "date" }, "quantity": { "type": "number", "exclusiveMinimum": 0 } } },

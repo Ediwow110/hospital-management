@@ -11,6 +11,15 @@ function post(router, path, userId, key, body = {}) {
   });
 }
 
+function postWithHeaders(router, path, headers, body = {}) {
+  return router.handle({
+    method: 'POST',
+    path,
+    headers,
+    rawBody: JSON.stringify(body)
+  });
+}
+
 function get(router, path, userId) {
   return router.handle({
     method: 'GET',
@@ -47,6 +56,12 @@ async function testProductionHappyPath() {
   });
   assert.strictEqual(order.status, 201);
   assert.strictEqual(order.body.data.invoice.invoiceNo, 'INV-2026-000001');
+
+  const cashierSession = await post(router, '/billing/cashier-sessions', 'u-cashier', 'cashier-open-key-001', {
+    openingCash: 100
+  });
+  assert.strictEqual(cashierSession.status, 201);
+  assert.strictEqual(cashierSession.body.data.status, 'Open');
 
   const payment = await post(router, `/billing/invoices/${order.body.data.invoice.id}/payments`, 'u-cashier', 'payment-key-0001', {
     paymentMode: 'Cash',
@@ -198,6 +213,10 @@ async function testProductionApiSurfaceControls() {
     patientId: patientA.body.data.id,
     items: [{ serviceId: 'svc-cbc', quantity: 1 }]
   });
+  const surfaceCashierSession = await post(router, '/billing/cashier-sessions', 'u-cashier', 'surface-cashier-open', {
+    openingCash: 5000
+  });
+  assert.strictEqual(surfaceCashierSession.status, 201);
   const payment = await post(router, `/billing/invoices/${order.body.data.invoice.id}/payments`, 'u-cashier', 'surface-payment-01', {
     paymentMode: 'Cash',
     amount: 450
@@ -216,12 +235,12 @@ async function testProductionApiSurfaceControls() {
   });
   assert.strictEqual(refund.status, 202);
 
-  const cashierClose = await post(router, '/billing/cashier-sessions/cashier-session-1/close', 'u-cashier', 'cashier-close-01', {
+  const cashierClose = await post(router, `/billing/cashier-sessions/${surfaceCashierSession.body.data.id}/close`, 'u-cashier', 'cashier-close-01', {
     actualCash: 5450,
     remarks: 'Cash matched expected collections'
   });
   assert.strictEqual(cashierClose.status, 200);
-  assert.strictEqual(cashierClose.body.data.status, 'Closed');
+  assert.strictEqual(cashierClose.body.data.session.status, 'Closed');
 
   const labOrder = store.labOrders[0];
   const labResult = store.labResults[0];
@@ -298,10 +317,188 @@ async function testProductionApiSurfaceControls() {
   assert.strictEqual(logout.status, 204);
 }
 
+async function testScopedIdempotency() {
+  const store = createInMemoryStore();
+  const router = createRouter(store);
+  const sharedKey = 'shared-key-0001';
+
+  const firstPatient = await post(router, '/patients', 'u-reception', sharedKey, {
+    firstName: 'Lina',
+    lastName: 'Cruz',
+    birthdate: '1988-02-02',
+    sex: 'female',
+    mobile: '09171111111'
+  });
+  assert.strictEqual(firstPatient.status, 201);
+
+  const sameScope = await post(router, '/patients', 'u-reception', sharedKey, {
+    firstName: 'Different',
+    lastName: 'Payload',
+    birthdate: '1999-09-09',
+    sex: 'female',
+    mobile: '09172222222'
+  });
+  assert.deepStrictEqual(sameScope.body, firstPatient.body);
+
+  const differentRoute = await post(router, '/orders', 'u-reception', sharedKey, {
+    patientId: firstPatient.body.data.id,
+    items: [{ serviceId: 'svc-cbc', quantity: 1 }]
+  });
+  assert.strictEqual(differentRoute.status, 201);
+  assert.ok(differentRoute.body.data.order.orderNo);
+
+  const differentUser = await post(router, '/patients', 'u-admin', sharedKey, {
+    firstName: 'Admin',
+    lastName: 'Scoped',
+    birthdate: '1977-07-07',
+    sex: 'male',
+    mobile: '09173333333'
+  });
+  assert.strictEqual(differentUser.status, 201);
+  assert.notStrictEqual(differentUser.body.data.id, firstPatient.body.data.id);
+
+  store.users.push({
+    id: 'u-reception-branch-b',
+    email: 'branch.b@hospital.local',
+    password: 'HmsDemo2026!',
+    role: 'receptionist',
+    tenantId: 'tenant-demo',
+    branchIds: ['branch-secondary'],
+    mfaRequired: false,
+    status: 'active'
+  });
+  const differentBranch = await postWithHeaders(router, '/patients', {
+    'x-user-id': 'u-reception-branch-b',
+    'x-branch-id': 'branch-secondary',
+    'idempotency-key': sharedKey
+  }, {
+    firstName: 'Branch',
+    lastName: 'Scoped',
+    birthdate: '1995-05-05',
+    sex: 'female',
+    mobile: '09174444444'
+  });
+  assert.strictEqual(differentBranch.status, 201);
+  assert.strictEqual(differentBranch.body.data.branchId, 'branch-secondary');
+
+  store.users.push({
+    id: 'u-reception-tenant-b',
+    email: 'tenant.b@hospital.local',
+    password: 'HmsDemo2026!',
+    role: 'receptionist',
+    tenantId: 'tenant-other',
+    branchIds: ['branch-main'],
+    mfaRequired: false,
+    status: 'active'
+  });
+  const differentTenant = await post(router, '/patients', 'u-reception-tenant-b', sharedKey, {
+    firstName: 'Tenant',
+    lastName: 'Scoped',
+    birthdate: '1994-04-04',
+    sex: 'female',
+    mobile: '09175555555'
+  });
+  assert.strictEqual(differentTenant.status, 201);
+  assert.strictEqual(differentTenant.body.data.tenantId, 'tenant-other');
+}
+
+async function createBillableOrder(router) {
+  const patient = await post(router, '/patients', 'u-reception', `patient-key-${Date.now()}-${Math.random()}`, {
+    firstName: 'Cashier',
+    lastName: 'Owner',
+    birthdate: '1992-06-06',
+    sex: 'female',
+    mobile: `0917${String(Math.floor(Math.random() * 10000000)).padStart(7, '0')}`
+  });
+  assert.strictEqual(patient.status, 201);
+  const order = await post(router, '/orders', 'u-reception', `order-key-${Date.now()}-${Math.random()}`, {
+    patientId: patient.body.data.id,
+    items: [{ serviceId: 'svc-cbc', quantity: 1 }]
+  });
+  assert.strictEqual(order.status, 201);
+  return order.body.data;
+}
+
+async function testCashierSessionOwnership() {
+  const store = createInMemoryStore();
+  const router = createRouter(store);
+  const orderA = await createBillableOrder(router);
+  const orderB = await createBillableOrder(router);
+
+  const sessionA = await post(router, '/billing/cashier-sessions', 'u-cashier', 'cashier-a-open-key', {
+    openingCash: 100
+  });
+  assert.strictEqual(sessionA.status, 201);
+
+  const sessionB = await post(router, '/billing/cashier-sessions', 'u-cashier-b', 'cashier-b-open-key', {
+    openingCash: 50
+  });
+  assert.strictEqual(sessionB.status, 201);
+
+  const paymentA = await post(router, `/billing/invoices/${orderA.invoice.id}/payments`, 'u-cashier', 'cashier-a-pay-key', {
+    paymentMode: 'Cash',
+    amount: 200
+  });
+  assert.strictEqual(paymentA.status, 201);
+
+  const paymentB = await post(router, `/billing/invoices/${orderB.invoice.id}/payments`, 'u-cashier-b', 'cashier-b-pay-key', {
+    paymentMode: 'Cash',
+    amount: 180
+  });
+  assert.strictEqual(paymentB.status, 201);
+
+  const blockedClose = await post(router, `/billing/cashier-sessions/${sessionA.body.data.id}/close`, 'u-cashier-b', 'cashier-b-close-a', {
+    actualCash: 300,
+    remarks: 'Attempting to close another cashier session'
+  });
+  assert.strictEqual(blockedClose.status, 403);
+  assert.strictEqual(blockedClose.body.error.code, 'permission_denied');
+
+  const closed = await post(router, `/billing/cashier-sessions/${sessionA.body.data.id}/close`, 'u-cashier', 'cashier-a-close-key', {
+    actualCash: 300,
+    remarks: 'Balanced end of shift'
+  });
+  assert.strictEqual(closed.status, 200);
+  assert.strictEqual(closed.body.data.closingReport.expectedCash, 300);
+  assert.strictEqual(closed.body.data.closingReport.totalsByMode.Cash, 200);
+  assert.strictEqual(closed.body.data.closingReport.shortOver, 0);
+
+  const alreadyClosed = await post(router, `/billing/cashier-sessions/${sessionA.body.data.id}/close`, 'u-cashier', 'cashier-a-close-again', {
+    actualCash: 300,
+    remarks: 'Second close attempt'
+  });
+  assert.strictEqual(alreadyClosed.status, 409);
+  assert.strictEqual(alreadyClosed.body.error.code, 'cashier_session_closed');
+}
+
+async function testTypedWorkflowErrors() {
+  const store = createInMemoryStore();
+  const router = createRouter(store);
+  const order = await createBillableOrder(router);
+  const labOrder = store.labOrders.find(item => item.orderId === order.order.id);
+  const labResult = store.labResults.find(item => item.labOrderId === labOrder.id);
+
+  const prematureRelease = await post(router, `/lab/results/${labResult.id}/release`, 'u-pathologist', 'release-before-approve', {});
+  assert.strictEqual(prematureRelease.status, 409);
+  assert.strictEqual(prematureRelease.body.error.code, 'invalid_workflow_transition');
+  assert.ok(!prematureRelease.body.error.stack);
+
+  const collected = await post(router, `/lab/orders/${labOrder.id}/collect`, 'u-medtech', 'collect-once-key');
+  assert.strictEqual(collected.status, 200);
+
+  const repeatedCollect = await post(router, `/lab/orders/${labOrder.id}/collect`, 'u-medtech', 'collect-twice-key');
+  assert.strictEqual(repeatedCollect.status, 409);
+  assert.strictEqual(repeatedCollect.body.error.code, 'invalid_workflow_transition');
+  assert.ok(!repeatedCollect.body.error.stack);
+}
+
 async function main() {
   await testProductionHappyPath();
   await testProductionFailurePaths();
   await testProductionApiSurfaceControls();
+  await testScopedIdempotency();
+  await testCashierSessionOwnership();
+  await testTypedWorkflowErrors();
   console.log('All API workflow tests passed.');
 }
 

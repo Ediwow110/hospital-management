@@ -1,23 +1,26 @@
+const { AppError } = require('./app-error');
+const { PERMISSIONS } = require('./permissions');
+
 const ROLE_PERMISSIONS = Object.freeze({
   super_admin: ['*'],
   client_admin: ['tenant.manage', 'report.export', 'audit.view'],
   branch_admin: ['branch.manage', 'report.export', 'audit.view', 'approval.review'],
-  manager: ['report.view', 'report.export', 'approval.review', 'billing.refund.approve', 'order.void.approve', 'system.health.view', 'notification.send'],
-  department_manager: ['report.view', 'approval.review'],
-  receptionist: ['patient.view', 'patient.create', 'patient.update', 'patient.merge.request', 'appointment.create', 'order.create', 'queue.manage'],
-  cashier: ['billing.payment.create', 'billing.refund.request', 'billing.payment.void.request', 'order.void.request', 'cashier.close', 'report.view'],
-  nurse: ['patient.view', 'clinical.vitals.create'],
-  doctor: ['patient.view', 'clinical.encounter.create', 'clinical.note.create', 'order.create'],
-  med_tech: ['patient.view', 'lab.result.encode', 'lab.result.amend.request'],
-  pathologist: ['patient.view', 'lab.result.validate', 'lab.result.approve', 'lab.result.release', 'lab.result.amend.approve'],
+  manager: [PERMISSIONS.REPORT_VIEW, PERMISSIONS.REPORT_EXPORT, 'approval.review', PERMISSIONS.BILLING_REFUND_APPROVE, PERMISSIONS.ORDER_VOID_APPROVE, PERMISSIONS.SYSTEM_HEALTH_VIEW, 'notification.send'],
+  department_manager: [PERMISSIONS.REPORT_VIEW, 'approval.review'],
+  receptionist: [PERMISSIONS.PATIENT_VIEW, PERMISSIONS.PATIENT_CREATE, PERMISSIONS.PATIENT_UPDATE, PERMISSIONS.PATIENT_MERGE_REQUEST, 'appointment.create', PERMISSIONS.ORDER_CREATE, 'queue.manage'],
+  cashier: [PERMISSIONS.BILLING_PAYMENT_CREATE, PERMISSIONS.BILLING_REFUND_REQUEST, PERMISSIONS.BILLING_PAYMENT_VOID_REQUEST, PERMISSIONS.ORDER_VOID_REQUEST, PERMISSIONS.CASHIER_SESSION_OPEN, PERMISSIONS.CASHIER_SESSION_CLOSE, 'cashier.close', PERMISSIONS.REPORT_VIEW],
+  nurse: [PERMISSIONS.PATIENT_VIEW, 'clinical.vitals.create'],
+  doctor: [PERMISSIONS.PATIENT_VIEW, 'clinical.encounter.create', 'clinical.note.create', PERMISSIONS.ORDER_CREATE],
+  med_tech: [PERMISSIONS.PATIENT_VIEW, PERMISSIONS.LAB_RESULT_ENCODE, PERMISSIONS.LAB_RESULT_AMEND_REQUEST],
+  pathologist: [PERMISSIONS.PATIENT_VIEW, PERMISSIONS.LAB_RESULT_VALIDATE, PERMISSIONS.LAB_RESULT_APPROVE, PERMISSIONS.LAB_RESULT_RELEASE, PERMISSIONS.LAB_RESULT_AMEND_APPROVE],
   radiology_staff: ['patient.view', 'radiology.report.create'],
-  pharmacist: ['patient.view', 'pharmacy.dispense', 'inventory.view'],
-  inventory_staff: ['inventory.view', 'inventory.receive', 'inventory.transfer', 'inventory.adjust.request'],
+  pharmacist: [PERMISSIONS.PATIENT_VIEW, 'pharmacy.dispense', PERMISSIONS.INVENTORY_VIEW],
+  inventory_staff: [PERMISSIONS.INVENTORY_VIEW, PERMISSIONS.INVENTORY_RECEIVE, 'inventory.transfer', PERMISSIONS.INVENTORY_ADJUST_REQUEST],
   procurement_staff: ['inventory.view', 'procurement.request', 'procurement.po.create'],
   hr_staff: ['hr.employee.view', 'hr.employee.update', 'hr.leave.review'],
   hr_manager: ['hr.employee.view', 'hr.employee.update', 'hr.offboard.request', 'hr.leave.approve', 'report.view'],
   patient: ['portal.own_records.view'],
-  auditor: ['audit.view', 'report.view']
+  auditor: [PERMISSIONS.AUDIT_VIEW, PERMISSIONS.REPORT_VIEW]
 });
 
 const WORKFLOWS = Object.freeze({
@@ -120,7 +123,12 @@ function canTransition(workflowName, fromStatus, toStatus) {
 
 function assertTransition(workflowName, fromStatus, toStatus) {
   if (!canTransition(workflowName, fromStatus, toStatus)) {
-    throw new Error(`${workflowName} cannot move from ${fromStatus} to ${toStatus}`);
+    throw new AppError(
+      'invalid_workflow_transition',
+      `${workflowName} cannot move from ${fromStatus} to ${toStatus}`,
+      409,
+      { workflow: workflowName, fromStatus, toStatus }
+    );
   }
   return true;
 }
@@ -131,7 +139,7 @@ function isDangerousAction(action) {
 
 function requireReason(action, reason) {
   if (isDangerousAction(action) && !String(reason || '').trim()) {
-    throw new Error(`${action} requires a reason`);
+    throw new AppError('validation_error', `${action} requires a reason`, 422);
   }
   return true;
 }
@@ -179,7 +187,7 @@ function typeToDangerousAction(type) {
 
 function applyApprovalDecision({ approval, reviewer, approved, reason, requiredPermission, now = new Date().toISOString() }) {
   if (!canReviewApproval(reviewer, approval, requiredPermission)) {
-    throw new Error('Approval reviewer is not allowed');
+    throw new AppError('permission_denied', 'Approval reviewer is not allowed', 403);
   }
   return {
     ...approval,
@@ -190,16 +198,16 @@ function applyApprovalDecision({ approval, reviewer, approved, reason, requiredP
   };
 }
 
-function createAuditEvent({ id, user, module, action, recordType, recordId, oldValues = null, newValues = null, reason, ipAddress, deviceInfo, now = new Date().toISOString() }) {
+function createAuditEvent({ id, user, module, action, recordType, recordId, oldValues = null, newValues = null, reason, ipAddress, deviceInfo, tenantId = null, branchId = null, now = new Date().toISOString() }) {
   requireReason(action, reason);
-  if (!user || !user.id) throw new Error('Audit user is required');
-  if (!module || !action || !recordType || !recordId) throw new Error('Audit target is incomplete');
+  if (!user || !user.id) throw new AppError('validation_error', 'Audit user is required', 422);
+  if (!module || !action || !recordType || !recordId) throw new AppError('validation_error', 'Audit target is incomplete', 422);
   return Object.freeze({
     id,
     userId: user.id,
     userRole: user.role,
-    tenantId: user.tenantId || null,
-    branchId: user.branchIds?.[0] || null,
+    tenantId: tenantId || user.tenantId || null,
+    branchId: branchId || user.branchIds?.[0] || null,
     module,
     action,
     recordType,
@@ -237,7 +245,7 @@ function isNotificationPrivacySafe(message) {
 
 function buildNumber({ prefix, year, nextValue }) {
   if (!prefix || !year || !Number.isInteger(nextValue) || nextValue < 1) {
-    throw new Error('Invalid numbering sequence input');
+    throw new AppError('validation_error', 'Invalid numbering sequence input', 422);
   }
   return `${prefix}-${year}-${String(nextValue).padStart(6, '0')}`;
 }
@@ -249,7 +257,7 @@ function featureEnabled(tenant, featureFlag) {
 
 function requireFeature(tenant, featureFlag) {
   if (!featureEnabled(tenant, featureFlag)) {
-    throw new Error(`Feature ${featureFlag} is not enabled for tenant`);
+    throw new AppError('feature_disabled', `Feature ${featureFlag} is not enabled for tenant`, 403);
   }
   return true;
 }

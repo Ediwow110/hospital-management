@@ -3,17 +3,9 @@
 const { InMemoryStore } = require('./InMemoryStore');
 const { AppError, ERROR_CODES } = require('../../core/AppError');
 
-/**
- * InMemoryLabResultRepository
- *
- * IMMUTABILITY RULE:
- *   save() will reject if the existing record has status 'Released'.
- *   Corrections must use saveVersion() and then save() with status 'Amended'.
- */
 class InMemoryLabResultRepository extends InMemoryStore {
   constructor() {
     super();
-    /** @type {Map<string, object[]>} versions keyed by labResultId */
     this._versions = new Map();
   }
 

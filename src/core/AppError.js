@@ -6,6 +6,7 @@
  */
 const ERROR_CODES = Object.freeze({
   VALIDATION_ERROR:             'validation_error',
+  UNAUTHENTICATED:              'unauthenticated',
   PERMISSION_DENIED:            'permission_denied',
   NOT_FOUND:                    'not_found',
   INVALID_WORKFLOW_TRANSITION:  'invalid_workflow_transition',
@@ -21,6 +22,7 @@ const ERROR_CODES = Object.freeze({
  */
 const CODE_TO_STATUS = Object.freeze({
   [ERROR_CODES.VALIDATION_ERROR]:            400,
+  [ERROR_CODES.UNAUTHENTICATED]:             401,
   [ERROR_CODES.PERMISSION_DENIED]:           403,
   [ERROR_CODES.NOT_FOUND]:                   404,
   [ERROR_CODES.INVALID_WORKFLOW_TRANSITION]: 409,

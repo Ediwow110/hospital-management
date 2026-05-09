@@ -5,23 +5,23 @@ const { AppError, ERROR_CODES } = require('../core/AppError');
 const { PERMISSIONS } = require('../core/permissions');
 
 class OrderService {
-  constructor({ orderRepo, invoiceRepo, auditService }) {
+  constructor({ orderRepo, invoiceRepo, auditService, securityAuditService }) {
     this._orders = orderRepo;
     this._invoices = invoiceRepo;
     this._audit = auditService;
+    this._securityAudit = securityAuditService;
   }
 
-  /**
-   * Create order + invoice atomically.
-   * PR #4: wrap in withTransaction(pool, tx => ...).
-   *
-   * @param {object} data - { patientId, items: [{ description, qty, unitPrice }] }
-   * @param {AppContext} context
-   * @returns {Promise<{ order: object, invoice: object }>}
-   */
   async createOrder(data, context) {
     if (!context.can(PERMISSIONS.ORDER_CREATE)) {
       await this._audit.recordSecurityEvent(context, 'order.create.denied', {});
+      if (this._securityAudit) {
+        await this._securityAudit.log('PERMISSION_DENIED', {
+          tenantId: context.tenantId,
+          userId: context.userId,
+          payload: { action: PERMISSIONS.ORDER_CREATE },
+        });
+      }
       throw new AppError(ERROR_CODES.PERMISSION_DENIED, 'order.create permission required');
     }
 
@@ -38,26 +38,26 @@ class OrderService {
     const total = data.items.reduce((sum, i) => sum + (i.qty * i.unitPrice), 0);
 
     const order = {
-      id:         orderId,
-      patientId:  data.patientId,
-      branchId:   context.branchId,
-      items:      data.items,
+      id: orderId,
+      patientId: data.patientId,
+      branchId: context.branchId,
+      items: data.items,
       total,
-      status:     'Pending',
-      createdBy:  context.userId,
-      createdAt:  new Date().toISOString(),
+      status: 'Pending',
+      createdBy: context.userId,
+      createdAt: new Date().toISOString(),
     };
 
     const invoice = {
-      id:         invoiceId,
+      id: invoiceId,
       orderId,
-      patientId:  data.patientId,
-      branchId:   context.branchId,
+      patientId: data.patientId,
+      branchId: context.branchId,
       total,
-      balance:    total,
-      status:     'Unpaid',
-      isLocked:   false,
-      createdAt:  new Date().toISOString(),
+      balance: total,
+      status: 'Unpaid',
+      isLocked: false,
+      createdAt: new Date().toISOString(),
     };
 
     const savedOrder = await this._orders.save(order, context);

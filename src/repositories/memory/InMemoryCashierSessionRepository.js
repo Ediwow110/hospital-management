@@ -9,6 +9,15 @@ class InMemoryCashierSessionRepository extends InMemoryStore {
     return record;
   }
 
+  async findByIdOrNumber(idOrNumber, context, tx) {
+    const byId = this._get(idOrNumber);
+    if (byId && byId.tenantId === context.tenantId) return byId;
+    const byNumber = this._all().find(
+      r => r.number === idOrNumber && r.tenantId === context.tenantId
+    );
+    return byNumber ?? null;
+  }
+
   async save(entity, context, tx) {
     if (!entity.id) throw new Error('InMemoryCashierSessionRepository.save: entity.id required');
     const record = { ...entity, tenantId: context.tenantId, updatedAt: new Date().toISOString() };

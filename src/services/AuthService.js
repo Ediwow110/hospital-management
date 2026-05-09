@@ -126,7 +126,7 @@ async verifyToken(token, requestId, ipAddress) {
     } catch (err) {
       throw new AppError(ERROR_CODES.PERMISSION_DENIED, 'Invalid or expired token');
     }
-  }  }
+  } 
 
   /**
    * Logout (currently no server-side revocation).

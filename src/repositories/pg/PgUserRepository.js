@@ -26,8 +26,8 @@ class PgUserRepository {
     const client = context._tx || this._pool;
     const { rows } = await client.query(
       `SELECT id, tenant_id AS "tenantId", branch_id AS "branchId",
-              email, password_hash AS "passwordHash", name,
-              roles, status
+              email, password_hash AS "passwordHash", full_name AS "name",
+              role AS "roles", status
        FROM users
        WHERE email = $1 AND tenant_id = $2
        LIMIT 1`,
@@ -45,8 +45,8 @@ class PgUserRepository {
     const client = context._tx || this._pool;
     const { rows } = await client.query(
       `SELECT id, tenant_id AS "tenantId", branch_id AS "branchId",
-              email, password_hash AS "passwordHash", name,
-              roles, status
+              email, password_hash AS "passwordHash", full_name AS "name",
+              role AS "roles", status
        FROM users
        WHERE id = $1 AND tenant_id = $2
        LIMIT 1`,
@@ -63,24 +63,24 @@ class PgUserRepository {
   async save(user, context) {
     const client = context._tx || this._pool;
     const { rows } = await client.query(
-      `INSERT INTO users (id, tenant_id, branch_id, email, password_hash, name, roles, status)
+      `INSERT INTO users (id, tenant_id, branch_id, email, password_hash, full_name AS "name", role AS "roles", status)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        ON CONFLICT (id) DO UPDATE SET
          email = EXCLUDED.email,
          password_hash = EXCLUDED.password_hash,
-         name = EXCLUDED.name,
-         roles = EXCLUDED.roles,
+         name = EXCLUDED.full_name AS "name",
+         roles = EXCLUDED.role AS "roles",
          status = EXCLUDED.status
        RETURNING id, tenant_id AS "tenantId", branch_id AS "branchId",
-                 email, password_hash AS "passwordHash", name, roles, status`,
+                 email, password_hash AS "passwordHash", full_name AS "name", role AS "roles", status`,
       [
         user.id,
         user.tenantId,
         user.branchId,
         user.email,
         user.passwordHash,
-        user.name,
-        user.roles,
+        user.full_name AS "name",
+        user.role AS "roles",
         user.status,
       ]
     );

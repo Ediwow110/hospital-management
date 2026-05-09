@@ -2,14 +2,14 @@
   "name": "hospital-management",
   "version": "0.4.0",
   "private": true,
-  "description": "PR #4 — PostgreSQL Persistence Foundation. Extends the production-grade backend from PR #3. Not production-ready.",
+  "description": "PR #4 - PostgreSQL Persistence Foundation. Extends the production-grade backend from PR #3. Not production-ready.",
   "dependencies": {
     "pg": "^8.11.3"
   },
   "scripts": {
     "start:api": "node src/api/server.js",
     "migrate": "node src/infrastructure/migrate.js",
-    "check": "node --check src/core/AppContext.js && node --check src/core/AppError.js && node --check src/core/permissions.js && node --check src/core/workflow.js && node --check src/repositories/memory/InMemoryUserRepository.js && node --check src/repositories/memory/InMemoryAuditLogRepository.js && node --check src/repositories/memory/InMemoryPatientRepository.js && node --check src/repositories/memory/InMemoryOrderRepository.js && node --check src/repositories/memory/InMemoryInvoiceRepository.js && node --check src/repositories/memory/InMemoryPaymentRepository.js && node --check src/repositories/memory/InMemoryCashierSessionRepository.js && node --check src/repositories/memory/InMemoryLabResultRepository.js && node --check src/repositories/pg/PgUserRepository.js && node --check src/repositories/pg/PgAuditLogRepository.js && node --check src/repositories/pg/PgLabResultRepository.js && node --check src/infrastructure/db-pool.js && node --check src/infrastructure/transaction.js && node --check src/infrastructure/migrate.js && node --check src/services/AuditService.js && node --check src/services/AuthService.js && node --check src/services/HealthService.js && node --check src/services/PatientService.js && node --check src/services/OrderService.js && node --check src/services/BillingService.js && node --check src/services/LabService.js && node --check tests/backend.test.js && node --check tests/integration.test.js",
+    "check": "node --check src/core/app-context.js && node --check src/core/app-error.js && node --check src/core/permissions.js && node --check src/core/production-rules.js && node --check src/core/validation.js && node --check src/repositories/pg/PgUserRepository.js && node --check src/repositories/pg/PgAuditLogRepository.js && node --check src/repositories/pg/PgLabResultRepository.js && node --check src/infrastructure/db-pool.js && node --check src/infrastructure/transaction.js && node --check src/services/hms-service.js && node --check tests/integration.test.js",
     "test": "node tests/backend.test.js",
     "test:integration": "node tests/integration.test.js"
   }

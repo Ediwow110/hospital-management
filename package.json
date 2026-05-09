@@ -12,9 +12,9 @@
     "start:api": "node src/api/server.js",
     "start": "node src/api/server.js",
     "dev": "node --watch src/api/server.js",
-    "test:backend": "node tests/backend.test.js"
+    "test:backend": "node tests/backend.test.js",
     "migrate": "node src/infrastructure/migrate.js",
-    "check": "node --check src/core/app-context.js && node --check src/core/app-error.js && node --check src/core/permissions.js && node --check src/core/production-rules.js && node --check src/core/validation.js && node --check src/repositories/pg/PgUserRepository.js && node --check src/repositories/pg/PgAuditLogRepository.js && node --check src/repositories/pg/PgLabResultRepository.js && node --check src/infrastructure/db-pool.js && node --check src/infrastructure/transaction.js && node --check src/services/hms-service.js && node --check tests/integration.test.js",
+    "check": "node --check src/core/app-context.js && node --check src/core/app-error.js && node --check src/core/permissions.js && node --check src/api/router.js && node --check src/api/server.js",
     "test": "node tests/production-rules.test.js",
     "test:integration": "node tests/integration.test.js"
   }

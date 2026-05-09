@@ -1,0 +1,32 @@
+name: HMS Production-Grade CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - pr3-backend-runtime
+      - "pr3/**"
+
+jobs:
+  check-and-test:
+    name: Syntax checks and workflow tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install dependencies
+        run: npm install --ignore-scripts 2>/dev/null || true
+
+      - name: Syntax checks (npm run check)
+        run: npm run check
+
+      - name: Backend workflow tests (npm test)
+        run: npm test

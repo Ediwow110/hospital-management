@@ -110,15 +110,23 @@ class AuthService {
    * @param {string} token
    * @returns {Promise<object>}
    */
-  async verifyToken(token) {
+async verifyToken(token, requestId, ipAddress) {
     try {
       const payload = jwt.verify(token, this._jwtSecret);
       const permissions = (payload.roles || []).flatMap((r) => ROLE_PERMISSIONS[r] || []);
-      return { ...payload, permissions };
+      return new AppContext({
+        requestId,
+        tenantId: payload.tenantId,
+        branchId: payload.branchId,
+        userId: payload.userId,
+        roles: payload.roles,
+        permissions,
+        ipAddress
+      });
     } catch (err) {
       throw new AppError(ERROR_CODES.PERMISSION_DENIED, 'Invalid or expired token');
     }
-  }
+  }  }
 
   /**
    * Logout (currently no server-side revocation).

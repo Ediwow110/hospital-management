@@ -21,7 +21,12 @@ function createInMemoryStore() {
       { id: 'u-pathologist', email: 'pathologist@hospital.local', password: 'HmsDemo2026!', role: 'pathologist', tenantId: 'tenant-demo', branchIds: ['branch-main'], mfaRequired: true, status: 'active' },
       { id: 'u-manager', email: 'manager@hospital.local', password: 'HmsDemo2026!', role: 'manager', tenantId: 'tenant-demo', branchIds: ['branch-main'], mfaRequired: true, status: 'active' }
     ],
+    roles: [
+      { id: 'role-receptionist', code: 'receptionist', tenantId: 'tenant-demo', branchId: 'branch-main', permissions: ['patient.view', 'patient.create', 'appointment.create', 'order.create', 'queue.manage'] },
+      { id: 'role-cashier', code: 'cashier', tenantId: 'tenant-demo', branchId: 'branch-main', permissions: ['billing.payment.create', 'billing.refund.request', 'order.void.request', 'cashier.close'] }
+    ],
     patients: [],
+    appointments: [],
     services: [
       { id: 'svc-cbc', code: 'CBC', name: 'Complete Blood Count', department: 'Laboratory', price: 450, version: 1, tenantId: 'tenant-demo', branchId: 'branch-main' },
       { id: 'svc-fbs', code: 'FBS', name: 'Fasting Blood Sugar', department: 'Laboratory', price: 180, version: 1, tenantId: 'tenant-demo', branchId: 'branch-main' },
@@ -30,6 +35,9 @@ function createInMemoryStore() {
     orders: [],
     invoices: [],
     payments: [],
+    cashierSessions: [
+      { id: 'cashier-session-1', tenantId: 'tenant-demo', branchId: 'branch-main', cashierId: 'u-cashier', status: 'Open', openingCash: 5000, actualCash: null, variance: null }
+    ],
     queueTickets: [],
     labOrders: [],
     labResults: [],
@@ -37,17 +45,25 @@ function createInMemoryStore() {
     inventory: [
       { id: 'inv-cbc-reagent', code: 'CBC-REAGENT', name: 'CBC Reagent', qty: 12, reorderLevel: 10, expiry: '2026-12-31', tenantId: 'tenant-demo', branchId: 'branch-main', status: 'stocked' }
     ],
+    employees: [
+      { id: 'employee-1', employeeNo: 'EMP-2026-000001', fullName: 'Maria Santos', userId: 'u-medtech', tenantId: 'tenant-demo', branchId: 'branch-main', status: 'active' }
+    ],
     notifications: [],
+    backups: [],
     jobs: [],
     auditLogs: [],
     idempotency: new Map(),
     ids: {
       patient: 1,
+      user: 1,
+      appointment: 1,
       order: 1,
       invoice: 1,
       payment: 1,
+      cashier: 1,
       queue: 1,
-      lab: 1
+      lab: 1,
+      backup: 1
     },
     sequences: {
       patient: 1,

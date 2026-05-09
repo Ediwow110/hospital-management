@@ -237,11 +237,17 @@ function assertExecutableFoundationExists() {
 
 function assertRouterCoveredByOpenApi() {
   const router = createRouter(createInMemoryStore());
-  const openApiRoutes = new Set(Object.keys(openapi.paths));
-  const missing = router.routes
-    .map(route => route.pattern.replace(/:([A-Za-z0-9_]+)/g, '{$1}'))
-    .filter(pattern => !openApiRoutes.has(pattern));
-  assert.deepStrictEqual(missing, []);
+  const openApiOperations = new Set();
+  Object.entries(openapi.paths).forEach(([pattern, pathItem]) => {
+    Object.keys(pathItem).forEach(method => {
+      openApiOperations.add(`${method.toUpperCase()} ${pattern}`);
+    });
+  });
+  const routerOperations = new Set(router.routes.map(route => `${route.method} ${route.pattern.replace(/:([A-Za-z0-9_]+)/g, '{$1}')}`));
+  const undocumentedRouterRoutes = [...routerOperations].filter(operation => !openApiOperations.has(operation));
+  const unimplementedContractRoutes = [...openApiOperations].filter(operation => !routerOperations.has(operation));
+  assert.deepStrictEqual(undocumentedRouterRoutes, []);
+  assert.deepStrictEqual(unimplementedContractRoutes, []);
 }
 
 assertTablesExist();

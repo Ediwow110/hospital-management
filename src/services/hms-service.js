@@ -36,6 +36,71 @@ class HmsService {
     return { accessToken: `demo-token-${user.id}`, user: this.publicUser(user) };
   }
 
+  logout({ user }) {
+    this.audit({ user, module: 'auth', action: 'logout', recordType: 'session', recordId: user.id, reason: 'User ended session' });
+    return null;
+  }
+
+  verifyMfa({ challengeId, otp }) {
+    requireFields({ challengeId, otp }, ['challengeId', 'otp']);
+    if (String(otp).length < 6) throw new AppError('validation_failed', 'OTP must contain at least 6 characters', 422);
+    return { accessToken: `demo-token-${challengeId}`, mfaVerified: true };
+  }
+
+  listUsers({ user }) {
+    this.assertPermission(user, 'admin.user.view', null);
+    return { data: this.store.users.filter(item => item.tenantId === user.tenantId).map(item => this.publicUser(item)) };
+  }
+
+  createUser({ user, body, idempotencyKey }) {
+    return this.withIdempotency(idempotencyKey, () => {
+      this.assertPermission(user, 'admin.user.create', null);
+      requireFields(body, ['email', 'fullName', 'roleCodes', 'branchIds']);
+      if (!Array.isArray(body.roleCodes) || !body.roleCodes.length) throw new AppError('validation_failed', 'At least one role is required', 422);
+      if (!Array.isArray(body.branchIds) || !body.branchIds.length) throw new AppError('validation_failed', 'At least one branch is required', 422);
+      if (this.store.users.some(item => item.email === body.email)) throw new AppError('duplicate_user', 'A named user with this email already exists', 409);
+      const created = {
+        id: this.nextId('user'),
+        email: body.email,
+        fullName: body.fullName,
+        role: body.roleCodes[0],
+        roleCodes: body.roleCodes,
+        tenantId: user.tenantId,
+        branchIds: body.branchIds,
+        mfaRequired: ['super_admin', 'manager', 'doctor', 'hr_manager', 'cashier'].includes(body.roleCodes[0]),
+        status: 'active'
+      };
+      this.store.users.push(created);
+      this.audit({ user, module: 'users', action: 'user.create', recordType: 'user', recordId: created.id, newValues: this.publicUser(created), reason: 'Named user created; shared staff accounts are prohibited' });
+      return { data: this.publicUser(created) };
+    });
+  }
+
+  deactivateUser({ user, targetUserId, body, idempotencyKey }) {
+    return this.withIdempotency(idempotencyKey, () => {
+      this.assertPermission(user, 'user.deactivate', null);
+      requireFields(body, ['reason']);
+      const target = this.store.users.find(item => item.id === targetUserId && item.tenantId === user.tenantId);
+      if (!target) throw new AppError('user_not_found', 'User is unavailable for this scope', 404);
+      return this.createApproval({ user, type: 'user_deactivate', module: 'users', recordType: 'user', recordId: target.id, reason: body.reason });
+    });
+  }
+
+  requestRolePermissionChange({ user, roleId, body, idempotencyKey }) {
+    return this.withIdempotency(idempotencyKey, () => {
+      this.assertPermission(user, 'admin.role.change', null);
+      requireFields(body, ['permissionCodes', 'reason']);
+      const role = this.store.roles.find(item => item.id === roleId || item.code === roleId);
+      if (!role || !canAccessRecord(user, role, 'admin.role.change')) throw new AppError('role_not_found', 'Role is unavailable for this scope', 404);
+      return this.createApproval({ user, type: 'role_change', module: 'roles', recordType: 'role', recordId: role.id, reason: body.reason, newValues: { permissionCodes: body.permissionCodes } });
+    });
+  }
+
+  searchPatients({ user }) {
+    this.assertPermission(user, 'patient.view', null);
+    return { data: this.store.patients.filter(patient => canAccessRecord(user, patient, 'patient.view')) };
+  }
+
   registerPatient({ user, body, idempotencyKey }) {
     return this.withIdempotency(idempotencyKey, () => {
       this.assertPermission(user, 'patient.create', null);
@@ -66,6 +131,62 @@ class HmsService {
       this.store.patients.push(patient);
       this.audit({ user, module: 'patients', action: 'patient.create', recordType: 'patient', recordId: patient.patientNo, newValues: patient, reason: duplicateRisk ? 'Patient registered with duplicate risk' : 'Patient registration' });
       return { data: patient };
+    });
+  }
+
+  archivePatient({ user, patientId, body, idempotencyKey }) {
+    return this.withIdempotency(idempotencyKey, () => {
+      this.assertPermission(user, 'patient.archive', null);
+      requireFields(body, ['reason']);
+      const patient = this.getScopedPatient(user, patientId);
+      return this.createApproval({ user, type: 'patient_archive', module: 'patients', recordType: 'patient', recordId: patient.patientNo, reason: body.reason });
+    });
+  }
+
+  requestPatientMerge({ user, body, idempotencyKey }) {
+    return this.withIdempotency(idempotencyKey, () => {
+      this.assertPermission(user, 'patient.merge.request', null);
+      requireFields(body, ['sourcePatientId', 'targetPatientId', 'reason']);
+      const source = this.getScopedPatient(user, body.sourcePatientId);
+      const target = this.getScopedPatient(user, body.targetPatientId);
+      if (source.id === target.id) throw new AppError('validation_failed', 'Source and target patients must be different', 422);
+      return this.createApproval({
+        user,
+        type: 'patient_merge',
+        module: 'patients',
+        recordType: 'patient_merge',
+        recordId: `${source.patientNo}->${target.patientNo}`,
+        reason: body.reason,
+        newValues: { sourcePatientId: source.id, targetPatientId: target.id }
+      });
+    });
+  }
+
+  createAppointment({ user, body, idempotencyKey }) {
+    return this.withIdempotency(idempotencyKey, () => {
+      this.assertPermission(user, 'appointment.create', null);
+      requireFields(body, ['patientId', 'appointmentAt', 'serviceIds']);
+      const patient = this.getScopedPatient(user, body.patientId);
+      if (!Array.isArray(body.serviceIds) || !body.serviceIds.length) throw new AppError('validation_failed', 'Appointment requires at least one service', 422);
+      const services = body.serviceIds.map(serviceId => {
+        const service = this.store.services.find(item => item.id === serviceId);
+        if (!service || !canAccessRecord(user, service, 'order.create')) throw new AppError('service_not_found', 'Service is unavailable for this scope', 404);
+        return { id: service.id, code: service.code, name: service.name };
+      });
+      const appointment = {
+        id: this.nextId('appointment'),
+        tenantId: user.tenantId,
+        branchId: user.branchIds[0],
+        patientId: patient.id,
+        appointmentAt: body.appointmentAt,
+        services,
+        status: 'Scheduled',
+        createdBy: user.id
+      };
+      this.store.appointments.push(appointment);
+      this.queueNotification({ user, recipientPatientId: patient.id, templateCode: 'appointment_created', body: 'Your appointment information is available in your secure patient portal.' });
+      this.audit({ user, module: 'appointments', action: 'appointment.create', recordType: 'appointment', recordId: appointment.id, newValues: appointment, reason: 'Appointment created with privacy-safe reminder queued' });
+      return { data: appointment };
     });
   }
 
@@ -166,6 +287,61 @@ class HmsService {
     });
   }
 
+  requestOrderVoid({ user, orderId, body, idempotencyKey }) {
+    return this.withIdempotency(idempotencyKey, () => {
+      this.assertPermission(user, 'order.void.request', null);
+      requireFields(body, ['reason']);
+      const order = this.getScopedOrder(user, orderId, 'order.void.request');
+      if (['Voided', 'Completed'].includes(order.status)) throw new AppError('order_not_voidable', `Order ${order.status} cannot be voided through this request`, 409);
+      return this.createApproval({ user, type: 'order_void', module: 'orders', recordType: 'order', recordId: order.orderNo, reason: body.reason });
+    });
+  }
+
+  requestRefund({ user, paymentId, body, idempotencyKey }) {
+    return this.withIdempotency(idempotencyKey, () => {
+      this.assertPermission(user, 'billing.refund.request', null);
+      requireFields(body, ['reason']);
+      const payment = this.getScopedPayment(user, paymentId, 'billing.refund.request');
+      if (payment.status !== 'Posted') throw new AppError('payment_not_refundable', 'Only posted payments can be refunded', 409);
+      return this.createApproval({ user, type: 'refund', module: 'billing', recordType: 'payment', recordId: payment.receiptNo, reason: body.reason });
+    });
+  }
+
+  closeCashierSession({ user, cashierSessionId, body, idempotencyKey }) {
+    return this.withIdempotency(idempotencyKey, () => {
+      this.assertPermission(user, 'cashier.close', null);
+      requireFields(body, ['actualCash', 'remarks']);
+      const session = this.store.cashierSessions.find(item => item.id === cashierSessionId && canAccessRecord(user, item, 'cashier.close'));
+      if (!session) throw new AppError('cashier_session_not_found', 'Cashier session is unavailable for this scope', 404);
+      if (session.status === 'Closed') throw new AppError('cashier_session_closed', 'Cashier session is already closed', 409);
+      const cashPayments = this.store.payments.filter(payment => payment.cashierId === user.id && payment.paymentMode === 'Cash' && payment.status === 'Posted');
+      const expectedCash = Number((session.openingCash + cashPayments.reduce((sum, payment) => sum + payment.amount, 0)).toFixed(2));
+      const actualCash = normalizeMoney(body.actualCash, 'actualCash');
+      session.status = 'Closed';
+      session.expectedCash = expectedCash;
+      session.actualCash = actualCash;
+      session.variance = Number((actualCash - expectedCash).toFixed(2));
+      session.closedBy = user.id;
+      session.closedAt = this.now();
+      session.remarks = body.remarks;
+      this.audit({ user, module: 'billing', action: 'cashier.close', recordType: 'cashier_session', recordId: session.id, newValues: session, reason: body.remarks });
+      return { data: session };
+    });
+  }
+
+  callQueueTicket({ user, queueTicketId, idempotencyKey }) {
+    return this.withIdempotency(idempotencyKey, () => {
+      this.assertPermission(user, 'queue.manage', null);
+      const ticket = this.getScopedQueueTicket(user, queueTicketId);
+      if (['Completed', 'Cancelled'].includes(ticket.status)) throw new AppError('queue_ticket_closed', 'Closed queue tickets cannot be called', 409);
+      ticket.status = 'Called';
+      ticket.calledBy = user.id;
+      ticket.calledAt = this.now();
+      this.audit({ user, module: 'queue', action: 'queue.call', recordType: 'queue_ticket', recordId: ticket.ticketNo, newValues: ticket, reason: 'Queue ticket called to station' });
+      return { data: ticket };
+    });
+  }
+
   collectSpecimen({ user, labOrderId, idempotencyKey }) {
     return this.transitionLab({ user, labOrderId, targetStatus: 'Collected', permission: 'lab.result.encode', action: 'lab.specimen.collect', idempotencyKey });
   }
@@ -237,22 +413,20 @@ class HmsService {
     });
   }
 
+  requestResultAmendment({ user, labResultId, body, idempotencyKey }) {
+    return this.withIdempotency(idempotencyKey, () => {
+      this.assertPermission(user, 'lab.result.amend.request', null);
+      requireFields(body, ['reason']);
+      const result = this.getScopedLabResult(user, labResultId);
+      if (result.status !== 'Released' || !result.isLocked) throw new AppError('result_not_released', 'Only released locked results can enter amendment workflow', 409);
+      return this.createApproval({ user, type: 'result_amendment', module: 'lab', recordType: 'lab_result', recordId: result.labNo, reason: body.reason });
+    });
+  }
+
   requestApproval({ user, type, module, recordType, recordId, reason, idempotencyKey }) {
     return this.withIdempotency(idempotencyKey, () => {
-      const approval = buildApprovalRequest({
-        id: this.nextNumber('approval', 'APR'),
-        type,
-        module,
-        recordType,
-        recordId,
-        reason,
-        requestedByUserId: user.id,
-        tenantId: user.tenantId,
-        branchId: user.branchIds[0]
-      });
-      this.store.approvals.push(approval);
-      this.audit({ user, module, action: `${type}.request`, recordType, recordId, reason });
-      return { approvalRequest: approval };
+      this.assertPermission(user, 'approval.request', null);
+      return this.createApproval({ user, type, module, recordType, recordId, reason });
     });
   }
 
@@ -269,6 +443,35 @@ class HmsService {
       item.status = item.qty <= item.reorderLevel ? 'low stock' : 'stocked';
       this.audit({ user, module: 'inventory', action: 'inventory.receive', recordType: 'inventory_item', recordId: item.id, newValues: item, reason: `Received batch ${body.batchNo}` });
       return { data: item };
+    });
+  }
+
+  requestInventoryAdjustment({ user, body, idempotencyKey }) {
+    return this.withIdempotency(idempotencyKey, () => {
+      requireFeature(this.store.tenant, 'enable_inventory');
+      this.assertPermission(user, 'inventory.adjust.request', null);
+      requireFields(body, ['inventoryItemId', 'quantity', 'reason']);
+      const item = this.store.inventory.find(record => record.id === body.inventoryItemId);
+      if (!item || !canAccessRecord(user, item, 'inventory.adjust.request')) throw new AppError('inventory_not_found', 'Inventory item is unavailable for this scope', 404);
+      return this.createApproval({ user, type: 'inventory_adjustment', module: 'inventory', recordType: 'inventory_item', recordId: item.id, reason: body.reason, newValues: { quantity: body.quantity } });
+    });
+  }
+
+  offboardEmployee({ user, employeeId, body, idempotencyKey }) {
+    return this.withIdempotency(idempotencyKey, () => {
+      requireFeature(this.store.tenant, 'enable_hr');
+      this.assertPermission(user, 'hr.offboard.request', null);
+      requireFields(body, ['reason']);
+      const employee = this.getScopedEmployee(user, employeeId);
+      return this.createApproval({
+        user,
+        type: 'user_deactivate',
+        module: 'hr',
+        recordType: 'employee',
+        recordId: employee.employeeNo || employee.id,
+        reason: body.reason,
+        newValues: { employeeStatus: 'offboarding_requested', linkedUserId: employee.userId }
+      });
     });
   }
 
@@ -289,6 +492,49 @@ class HmsService {
       this.store.jobs.push(job);
       this.audit({ user, module: 'reports', action: 'report.export', recordType: 'report', recordId: code, reason: body.reason });
       return { job };
+    });
+  }
+
+  sendNotification({ user, body, idempotencyKey }) {
+    return this.withIdempotency(idempotencyKey, () => {
+      this.assertPermission(user, 'notification.send', null);
+      requireFields(body, ['recipientType', 'recipientId', 'templateCode']);
+      const recipientPatientId = body.recipientType === 'patient' ? this.getScopedPatient(user, body.recipientId).id : null;
+      const notification = this.queueNotification({
+        user,
+        recipientPatientId,
+        templateCode: body.templateCode,
+        body: body.body || 'A new secure notification is available in your portal.'
+      });
+      this.audit({ user, module: 'notifications', action: 'notification.send', recordType: 'notification', recordId: notification.id, newValues: notification, reason: 'Privacy-safe notification queued' });
+      return { job: { id: notification.id, type: 'notification_send', status: notification.status } };
+    });
+  }
+
+  runBackup({ user, idempotencyKey }) {
+    return this.withIdempotency(idempotencyKey, () => {
+      this.assertPermission(user, 'backup.run', null);
+      const job = {
+        id: this.nextId('backup'),
+        tenantId: user.tenantId,
+        branchId: user.branchIds[0],
+        type: 'encrypted_backup',
+        status: 'queued',
+        requestedBy: user.id,
+        createdAt: this.now()
+      };
+      this.store.backups.push(job);
+      this.store.jobs.push(job);
+      this.audit({ user, module: 'backup', action: 'backup.run', recordType: 'backup_job', recordId: job.id, newValues: job, reason: 'Encrypted backup queued before deployment or maintenance work' });
+      return { job };
+    });
+  }
+
+  requestRestore({ user, body, idempotencyKey }) {
+    return this.withIdempotency(idempotencyKey, () => {
+      this.assertPermission(user, 'backup.restore.request', null);
+      requireFields(body, ['reason']);
+      return this.createApproval({ user, type: 'backup_restore', module: 'backup', recordType: 'backup_job', recordId: body.backupId || 'latest', reason: body.reason });
     });
   }
 
@@ -389,6 +635,24 @@ class HmsService {
     });
   }
 
+  createApproval({ user, type, module, recordType, recordId, reason, newValues = null }) {
+    const approval = buildApprovalRequest({
+      id: this.nextNumber('approval', 'APR'),
+      type,
+      module,
+      recordType,
+      recordId,
+      reason,
+      requestedByUserId: user.id,
+      tenantId: user.tenantId,
+      branchId: user.branchIds[0]
+    });
+    if (newValues) approval.newValues = newValues;
+    this.store.approvals.push(approval);
+    this.audit({ user, module, action: `${type}.request`, recordType, recordId, newValues, reason });
+    return { approvalRequest: approval };
+  }
+
   withIdempotency(key, operation) {
     if (!key) throw new AppError('idempotency_key_required', 'Idempotency key is required', 400);
     if (this.store.idempotency.has(key)) return this.store.idempotency.get(key);
@@ -432,6 +696,30 @@ class HmsService {
     const invoice = this.store.invoices.find(item => item.id === invoiceId || item.invoiceNo === invoiceId);
     if (!invoice || !canAccessRecord(user, invoice, 'billing.payment.create')) throw new AppError('invoice_not_found', 'Invoice is unavailable for this scope', 404);
     return invoice;
+  }
+
+  getScopedOrder(user, orderId, permission = 'order.create') {
+    const order = this.store.orders.find(item => item.id === orderId || item.orderNo === orderId);
+    if (!order || !canAccessRecord(user, order, permission)) throw new AppError('order_not_found', 'Order is unavailable for this scope', 404);
+    return order;
+  }
+
+  getScopedPayment(user, paymentId, permission = 'billing.payment.create') {
+    const payment = this.store.payments.find(item => item.id === paymentId || item.receiptNo === paymentId);
+    if (!payment || !canAccessRecord(user, payment, permission)) throw new AppError('payment_not_found', 'Payment is unavailable for this scope', 404);
+    return payment;
+  }
+
+  getScopedQueueTicket(user, queueTicketId) {
+    const ticket = this.store.queueTickets.find(item => item.id === queueTicketId || item.ticketNo === queueTicketId);
+    if (!ticket || !canAccessRecord(user, ticket, 'queue.manage')) throw new AppError('queue_ticket_not_found', 'Queue ticket is unavailable for this scope', 404);
+    return ticket;
+  }
+
+  getScopedEmployee(user, employeeId) {
+    const employee = this.store.employees.find(item => item.id === employeeId || item.employeeNo === employeeId);
+    if (!employee || !canAccessRecord(user, employee, 'hr.offboard.request')) throw new AppError('employee_not_found', 'Employee is unavailable for this scope', 404);
+    return employee;
   }
 
   getScopedLabOrder(user, labOrderId) {

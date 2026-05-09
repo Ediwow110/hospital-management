@@ -70,9 +70,9 @@ class OrderService {
   }
 
   async getOrder(id, context) {
-    if (!context.can(PERMISSIONS.ORDER_CREATE)) {
+    if (!context.can(PERMISSIONS.ORDER_VIEW)) {
       await this._audit.recordSecurityEvent(context, 'order.view.denied', { id });
-      throw new AppError(ERROR_CODES.PERMISSION_DENIED, 'order.create permission required');
+      throw new AppError(ERROR_CODES.PERMISSION_DENIED, 'order.view permission required');
     }
     const order = await this._orders.findById(id, context);
     if (!order) {

@@ -1,6 +1,14 @@
 'use strict';
 
-const BLOCKED_SECRETS = new Set(['demo-secret', 'changeme', 'secret']);
+const BLOCKED_SECRETS = new Set([
+  'demo-secret',
+  'changeme',
+  'secret',
+  'password',
+  'test',
+  '12345',
+  'admin',
+]);
 
 function validateEnv() {
   const errors = [];

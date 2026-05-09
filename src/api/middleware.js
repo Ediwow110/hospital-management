@@ -43,18 +43,19 @@ function authenticate(authService) {
 
 function buildLoginRateLimiter(securityAuditService) {
   const windowMs = Number(process.env.LOGIN_RATE_LIMIT_WINDOW_MS || 15 * 60 * 1000);
+  const buildLoginRateKey = req => {
+    const tenantId = (req.body && req.body.tenantId) || 'unknown-tenant';
+    const email = (req.body && req.body.email) || 'unknown-email';
+    const ip = req.ip || '';
+    return `${tenantId}::${String(email).toLowerCase()}::${ip}`;
+  };
   return rateLimit({
     windowMs,
     max: Number(process.env.LOGIN_RATE_LIMIT_MAX_ATTEMPTS || 5),
     standardHeaders: true,
     legacyHeaders: false,
     skipSuccessfulRequests: true,
-    keyGenerator: req => {
-      const tenantId = (req.body && req.body.tenantId) || 'unknown-tenant';
-      const email = (req.body && req.body.email) || 'unknown-email';
-      const ip = req.ip || '';
-      return `${tenantId}::${String(email).toLowerCase()}::${ip}`;
-    },
+    keyGenerator: buildLoginRateKey,
     handler: async (req, res) => {
       const retryAfter = Math.ceil(windowMs / 1000);
       await securityAuditService.log(SECURITY_EVENT_TYPES.LOGIN_LOCKOUT, {
@@ -62,7 +63,7 @@ function buildLoginRateLimiter(securityAuditService) {
         userId: (req.body && req.body.email) || null,
         ipAddress: req.ip || '',
         metadata: {
-          key: `${(req.body && req.body.tenantId) || 'unknown-tenant'}::${String((req.body && req.body.email) || 'unknown-email').toLowerCase()}::${req.ip || ''}`,
+          key: buildLoginRateKey(req),
           retryAfter,
         },
       });

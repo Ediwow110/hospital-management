@@ -13,10 +13,10 @@ function requireTenantId(context, method) {
 }
 
 /**
- * IMMUTABILITY RULE (app-layer):
- *   save() rejects if the existing record has status Released.
- *   Use saveVersion() for the amendment workflow.
- *   DB-level trigger in migrations/009_tenant_db_guards.sql enforces the same rule.
+ * IMMUTABILITY RULE:
+ *   save() rejects if existing record has status Released.
+ *   Use saveVersion() for amendment workflow.
+ *   DB-level trigger in migrations/009_tenant_db_guards.sql enforces the same.
  */
 class InMemoryLabResultRepository extends InMemoryStore {
   constructor() {
@@ -46,7 +46,7 @@ class InMemoryLabResultRepository extends InMemoryStore {
     if (existing && existing.status === 'Released') {
       throw new AppError(
         ERROR_CODES.RECORD_LOCKED,
-        'released_lab_result_immutable: Released lab results cannot be directly modified. Use the amendment workflow.'
+        'released_lab_result_immutable: Released lab results cannot be directly modified.'
       );
     }
     const record = { ...entity, tenantId: context.tenantId, updatedAt: new Date().toISOString() };
@@ -57,7 +57,7 @@ class InMemoryLabResultRepository extends InMemoryStore {
     requireTenantId(context, 'saveVersion');
     if (!entity.id) throw new Error('saveVersion: entity.id required');
     const existing = this._get(entity.id);
-    if (!existing) throw new AppError(ERROR_CODES.NOT_FOUND, 'Lab result not found for amendment');
+    if (!existing) throw new AppError(ERROR_CODES.NOT_FOUND, 'Lab result not found');
     const versions = this._versions.get(entity.id) || [];
     versions.push({ ...existing, versionedAt: new Date().toISOString() });
     this._versions.set(entity.id, versions);

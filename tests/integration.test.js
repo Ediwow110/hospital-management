@@ -73,14 +73,6 @@ async function seedFixtures() {
   return { planId: planId, tenantId: tenantId, branchId: branchId, userId: userId };
 }
 
-async function cleanup(tenantId) {
-  try { await pool.query('DELETE FROM approval_requests WHERE tenant_id = $1', [tenantId]); } catch (e) { void e; }
-  try { await pool.query('DELETE FROM audit_logs WHERE tenant_id = $1', [tenantId]); } catch (e) { void e; }
-  await pool.query('DELETE FROM users WHERE tenant_id = $1', [tenantId]);
-  await pool.query('DELETE FROM branches WHERE tenant_id = $1', [tenantId]);
-  await pool.query('DELETE FROM tenants WHERE id = $1', [tenantId]);
-}
-
 async function runTests() {
   console.log('Running PostgreSQL integration tests...');
 
@@ -209,18 +201,20 @@ async function runTests() {
     assert.strictEqual(res.rows.length, 0, 'rolled-back row must not exist');
   });
 
-  await cleanup(tenantId);
-  await pool.end();
-
+  // Print results BEFORE pool.end() so exit code is correct regardless of cleanup.
   console.log('='.repeat(60));
   console.log('Results: ' + passed + ' passed, ' + failed + ' failed');
+  var exitCode = failures.length > 0 ? 1 : 0;
   if (failures.length > 0) {
     console.log('Failures:');
     failures.forEach(function(f) { console.log('  - ' + f.name + ': ' + f.error); });
-    process.exit(1);
   } else {
     console.log('All PostgreSQL integration tests passed.');
   }
+
+  // Best-effort pool close; CI container is ephemeral.
+  try { await pool.end(); } catch (e) { void e; }
+  process.exit(exitCode);
 }
 
 runTests().catch(function(err) {
